@@ -4,22 +4,14 @@ use cosmwasm_std::{
 };
 
 use crate::msg::{CountResponse, HandleMsg, InitMsg, QueryMsg};
-use crate::state::{config, config_read, State};
+use crate::state::{config, config_read, offers, offers_read, Offer, State};
 
 pub fn init<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
     msg: InitMsg,
 ) -> StdResult<InitResponse> {
-    let state = State {
-        count: msg.count,
-        owner: deps.api.canonical_address(&env.message.sender)?,
-    };
-
-    config(&mut deps.storage).save(&state)?;
-
     debug_print!("Contract was initialized by {}", env.message.sender);
-
     Ok(InitResponse::default())
 }
 
@@ -31,6 +23,23 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     match msg {
         HandleMsg::Increment {} => try_increment(deps, env),
         HandleMsg::Reset { count } => try_reset(deps, env, count),
+        HandleMsg::MakeOffer {
+            id,
+            offeror_nft,
+            offeree_nft,
+            offeror_hands,
+            offeror_draw_point,
+        } => try_offer(
+            deps,
+            env,
+            id,
+            offeror_nft,
+            offeree_nft,
+            offeror_hands,
+            offeror_draw_point,
+        ),
+        HandleMsg::AcceptOffer {id, offeree_hands} => try_accept(deps, env, id, offeree_hands),
+        HandleMsg::DeclineOffer { id } => try_decline(deps, env, id),
     }
 }
 
@@ -62,6 +71,76 @@ pub fn try_reset<S: Storage, A: Api, Q: Querier>(
         Ok(state)
     })?;
     debug_print("count reset successfully");
+    Ok(HandleResponse::default())
+}
+
+pub fn try_offer<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    env: Env,
+    id: u64,
+    offeror_nft: String,
+    offeree_nft: String,
+    hands: Vec<u8>,
+    draw_point: u8,
+) -> StdResult<HandleResponse> {
+    match offers(&mut deps.storage).may_load(&id.to_be_bytes()) {
+        Ok(None) => {}
+        _ => return Err(StdError::generic_err(format!("duplicated id({})", id,))),
+    }
+
+    let sender_address_raw = deps.api.canonical_address(&env.message.sender)?;
+    let offer = Offer::new(
+        id,
+        sender_address_raw,
+        offeror_nft,
+        offeree_nft,
+        hands,
+        draw_point,
+    );
+
+    offers(&mut deps.storage).save(&id.to_be_bytes(), &offer)?;
+
+    debug_print("successfully offerd");
+    Ok(HandleResponse::default())
+}
+
+pub fn try_accept<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    env: Env,
+    id: u64,
+    hands: Vec<u8>,
+) -> StdResult<HandleResponse> {
+    let mut offer = offers(&mut deps.storage).load(&id.to_be_bytes())?;
+    let sender_address_raw = deps.api.canonical_address(&env.message.sender)?;
+    offer.accept_offer(sender_address_raw, hands);
+
+    offers(&mut deps.storage).update(&id.to_be_bytes(), |_| {
+        Ok(offer.clone())
+    })?;
+
+    let offeror_hands = offer.offeror_hands.clone();
+    let offeree_hands = offer.offeree_hands.clone();
+
+    let result = offeror_hands.matches(offeree_hands, offer.offeror_draw_point);
+
+    debug_print("successfully accepted");
+    Ok(HandleResponse::default())
+}
+
+pub fn try_decline<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    env: Env,
+    id: u64,
+) -> StdResult<HandleResponse> {
+    let mut offer = offers(&mut deps.storage).load(&id.to_be_bytes())?;
+    let sender_address_raw = deps.api.canonical_address(&env.message.sender)?;
+    offer.decline_offer(sender_address_raw);
+
+    offers(&mut deps.storage).update(&id.to_be_bytes(), |_| {
+        Ok(offer)
+    })?;
+
+    debug_print("successfully declined");
     Ok(HandleResponse::default())
 }
 

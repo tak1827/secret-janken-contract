@@ -1,4 +1,5 @@
 pub mod contract;
+pub mod hand;
 pub mod msg;
 pub mod state;
 

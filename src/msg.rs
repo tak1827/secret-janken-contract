@@ -10,7 +10,23 @@ pub struct InitMsg {
 #[serde(rename_all = "snake_case")]
 pub enum HandleMsg {
     Increment {},
-    Reset { count: i32 },
+    Reset {
+        count: i32,
+    },
+    MakeOffer {
+        id: u64,
+        offeror_nft: String,
+        offeree_nft: String,
+        offeror_hands: Vec<u8>,
+        offeror_draw_point: u8,
+    },
+    AcceptOffer {
+        id: u64,
+        offeree_hands: Vec<u8>,
+    },
+    DeclineOffer {
+        id: u64,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
