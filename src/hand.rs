@@ -13,7 +13,7 @@ impl Hand {
         *self as u8
     }
 
-    fn matches(&self, opponent: &Hand) -> MatchResult {
+    fn compete(&self, opponent: &Hand) -> MatchResult {
         if self.u8() == opponent.u8() {
             MatchResult::Draw
         } else if (self.eq(&Hand::Rock) && opponent.eq(&Hand::Scissors))
@@ -42,12 +42,12 @@ impl From<&u8> for Hand {
 pub struct Hands(Vec<Hand>);
 
 impl Hands {
-    pub fn matches(self, opponent: Hands, draw_point: u8) -> MatchResult {
+    pub fn compete(&self, opponent: &Hands, draw_point: u8) -> MatchResult {
         let mut point: u8 = 0;
         let my_hands: Vec<Hand> = self.into();
         let opponent_hands: Vec<Hand> = opponent.into();
         for (i, my_hand) in my_hands.iter().enumerate() {
-            let result = my_hand.matches(&opponent_hands[i]);
+            let result = my_hand.compete(&opponent_hands[i]);
             point += result.u8();
             if point > draw_point {
                 return MatchResult::Win;
@@ -58,6 +58,15 @@ impl Hands {
         } else {
             MatchResult::Lose
         }
+    }
+
+    pub fn to_u8_vec(&self) -> Vec<u8> {
+        let mut result: Vec<u8> = vec![];
+        let hands: Vec<Hand> = self.into();
+        for hand in hands.iter() {
+            result.push(hand.u8());
+        }
+        result
     }
 }
 
@@ -77,13 +86,13 @@ impl From<Vec<u8>> for Hands {
     }
 }
 
-impl From<Hands> for Vec<Hand> {
-    fn from(original: Hands) -> Vec<Hand> {
-        original.0
+impl From<&Hands> for Vec<Hand> {
+    fn from(original: &Hands) -> Self {
+        (*original.0).to_vec()
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum MatchResult {
     Lose = 0,
     Draw,
@@ -93,5 +102,43 @@ pub enum MatchResult {
 impl MatchResult {
     fn u8(&self) -> u8 {
         *self as u8
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hand_compete() {
+        let rock = Hand::Rock;
+        let paper = Hand::Paper;
+        let scissors = Hand::Scissors;
+
+        assert_eq!(MatchResult::Draw, rock.compete(&rock));
+        assert_eq!(MatchResult::Draw, paper.compete(&paper));
+        assert_eq!(MatchResult::Draw, scissors.compete(&scissors));
+
+        assert_eq!(MatchResult::Win, paper.compete(&rock));
+        assert_eq!(MatchResult::Win, scissors.compete(&paper));
+        assert_eq!(MatchResult::Win, rock.compete(&scissors));
+
+        assert_eq!(MatchResult::Lose, rock.compete(&paper));
+        assert_eq!(MatchResult::Lose, paper.compete(&scissors));
+        assert_eq!(MatchResult::Lose, scissors.compete(&rock));
+    }
+
+    #[test]
+    fn hands_compete() {
+        let player1: Hands = vec![Hand::Rock, Hand::Paper, Hand::Scissors, Hand::Rock].into();
+        let player2: Hands = vec![Hand::Scissors, Hand::Paper, Hand::Rock, Hand::Scissors].into();
+
+        assert_eq!(MatchResult::Draw, player1.compete(&player2, 5));
+        assert_eq!(MatchResult::Win, player1.compete(&player2, 4));
+        assert_eq!(MatchResult::Lose, player1.compete(&player2, 6));
+
+        assert_eq!(MatchResult::Draw, player2.compete(&player1, 3));
+        assert_eq!(MatchResult::Win, player2.compete(&player1, 2));
+        assert_eq!(MatchResult::Lose, player2.compete(&player1, 4));
     }
 }

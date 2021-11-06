@@ -1,18 +1,13 @@
+use cosmwasm_std::CosmosMsg;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct InitMsg {
-    pub count: i32,
-}
+pub struct InitMsg {}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum HandleMsg {
-    Increment {},
-    Reset {
-        count: i32,
-    },
     MakeOffer {
         id: u64,
         offeror_nft: String,
@@ -27,6 +22,22 @@ pub enum HandleMsg {
     DeclineOffer {
         id: u64,
     },
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CustomMsg {
+    MatchResult {
+        winner: String,
+        offeror_hands: Vec<u8>,
+        offeree_hands: Vec<u8>,
+    },
+}
+
+impl Into<CosmosMsg<CustomMsg>> for CustomMsg {
+    fn into(self) -> CosmosMsg<CustomMsg> {
+        CosmosMsg::Custom(self)
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

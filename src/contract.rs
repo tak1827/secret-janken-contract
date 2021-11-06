@@ -1,15 +1,16 @@
 use cosmwasm_std::{
-    debug_print, to_binary, Api, Binary, Env, Extern, HandleResponse, InitResponse, Querier,
-    StdError, StdResult, Storage,
+    debug_print, to_binary, Api, Binary, Context, Env, Extern, HandleResponse, InitResponse,
+    Querier, StdError, StdResult, Storage,
 };
 
-use crate::msg::{CountResponse, HandleMsg, InitMsg, QueryMsg};
-use crate::state::{config, config_read, offers, offers_read, Offer, State};
+use crate::hand::MatchResult;
+use crate::msg::{CountResponse, CustomMsg, HandleMsg, InitMsg, QueryMsg};
+use crate::state::{config_read, offers, offers_read, Offer};
 
 pub fn init<S: Storage, A: Api, Q: Querier>(
-    deps: &mut Extern<S, A, Q>,
+    _deps: &mut Extern<S, A, Q>,
     env: Env,
-    msg: InitMsg,
+    _msg: InitMsg,
 ) -> StdResult<InitResponse> {
     debug_print!("Contract was initialized by {}", env.message.sender);
     Ok(InitResponse::default())
@@ -19,10 +20,8 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
     msg: HandleMsg,
-) -> StdResult<HandleResponse> {
+) -> StdResult<HandleResponse<CustomMsg>> {
     match msg {
-        HandleMsg::Increment {} => try_increment(deps, env),
-        HandleMsg::Reset { count } => try_reset(deps, env, count),
         HandleMsg::MakeOffer {
             id,
             offeror_nft,
@@ -38,40 +37,9 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
             offeror_hands,
             offeror_draw_point,
         ),
-        HandleMsg::AcceptOffer {id, offeree_hands} => try_accept(deps, env, id, offeree_hands),
+        HandleMsg::AcceptOffer { id, offeree_hands } => try_accept(deps, env, id, offeree_hands),
         HandleMsg::DeclineOffer { id } => try_decline(deps, env, id),
     }
-}
-
-pub fn try_increment<S: Storage, A: Api, Q: Querier>(
-    deps: &mut Extern<S, A, Q>,
-    _env: Env,
-) -> StdResult<HandleResponse> {
-    config(&mut deps.storage).update(|mut state| {
-        state.count += 1;
-        debug_print!("count = {}", state.count);
-        Ok(state)
-    })?;
-
-    debug_print("count incremented successfully");
-    Ok(HandleResponse::default())
-}
-
-pub fn try_reset<S: Storage, A: Api, Q: Querier>(
-    deps: &mut Extern<S, A, Q>,
-    env: Env,
-    count: i32,
-) -> StdResult<HandleResponse> {
-    let sender_address_raw = deps.api.canonical_address(&env.message.sender)?;
-    config(&mut deps.storage).update(|mut state| {
-        if sender_address_raw != state.owner {
-            return Err(StdError::Unauthorized { backtrace: None });
-        }
-        state.count = count;
-        Ok(state)
-    })?;
-    debug_print("count reset successfully");
-    Ok(HandleResponse::default())
 }
 
 pub fn try_offer<S: Storage, A: Api, Q: Querier>(
@@ -82,10 +50,10 @@ pub fn try_offer<S: Storage, A: Api, Q: Querier>(
     offeree_nft: String,
     hands: Vec<u8>,
     draw_point: u8,
-) -> StdResult<HandleResponse> {
+) -> StdResult<HandleResponse<CustomMsg>> {
     match offers(&mut deps.storage).may_load(&id.to_be_bytes()) {
         Ok(None) => {}
-        _ => return Err(StdError::generic_err(format!("duplicated id({})", id,))),
+        _ => return Err(StdError::generic_err(format!("duplicated id({})", id))),
     }
 
     let sender_address_raw = deps.api.canonical_address(&env.message.sender)?;
@@ -109,36 +77,50 @@ pub fn try_accept<S: Storage, A: Api, Q: Querier>(
     env: Env,
     id: u64,
     hands: Vec<u8>,
-) -> StdResult<HandleResponse> {
+) -> StdResult<HandleResponse<CustomMsg>> {
     let mut offer = offers(&mut deps.storage).load(&id.to_be_bytes())?;
     let sender_address_raw = deps.api.canonical_address(&env.message.sender)?;
     offer.accept_offer(sender_address_raw, hands);
 
-    offers(&mut deps.storage).update(&id.to_be_bytes(), |_| {
-        Ok(offer.clone())
-    })?;
+    offers(&mut deps.storage).update(&id.to_be_bytes(), |_| Ok(offer.clone()))?;
 
-    let offeror_hands = offer.offeror_hands.clone();
-    let offeree_hands = offer.offeree_hands.clone();
+    let offeror_hands = &offer.offeror_hands;
+    let offeree_hands = &offer.offeree_hands;
 
-    let result = offeror_hands.matches(offeree_hands, offer.offeror_draw_point);
+    let result = offeror_hands.compete(offeree_hands, offer.offeror_draw_point);
+    let winner = if result.eq(&MatchResult::Win) {
+        "offeree".to_string()
+    } else if result.eq(&MatchResult::Lose) {
+        "offeror".to_string()
+    } else {
+        "draw".to_string()
+    };
+
+    let msg = CustomMsg::MatchResult {
+        winner: winner.clone(),
+        offeror_hands: offeror_hands.to_u8_vec(),
+        offeree_hands: offeree_hands.to_u8_vec(),
+    };
+
+    let mut ctx = Context::new();
+    ctx.add_log("action", "competed");
+    ctx.add_log("winner", &winner);
+    ctx.add_message(msg);
 
     debug_print("successfully accepted");
-    Ok(HandleResponse::default())
+    Ok(ctx.into())
 }
 
 pub fn try_decline<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
     id: u64,
-) -> StdResult<HandleResponse> {
+) -> StdResult<HandleResponse<CustomMsg>> {
     let mut offer = offers(&mut deps.storage).load(&id.to_be_bytes())?;
     let sender_address_raw = deps.api.canonical_address(&env.message.sender)?;
     offer.decline_offer(sender_address_raw);
 
-    offers(&mut deps.storage).update(&id.to_be_bytes(), |_| {
-        Ok(offer)
-    })?;
+    offers(&mut deps.storage).update(&id.to_be_bytes(), |_| Ok(offer))?;
 
     debug_print("successfully declined");
     Ok(HandleResponse::default())
@@ -162,69 +144,84 @@ fn query_count<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> StdRes
 mod tests {
     use super::*;
     use cosmwasm_std::testing::{mock_dependencies, mock_env};
-    use cosmwasm_std::{coins, from_binary, StdError};
+    use cosmwasm_std::{CosmosMsg, StdError};
 
     #[test]
     fn proper_initialization() {
         let mut deps = mock_dependencies(20, &[]);
 
-        let msg = InitMsg { count: 17 };
-        let env = mock_env("creator", &coins(1000, "earth"));
+        let msg = InitMsg {};
+        let env = mock_env("creator", &[]);
 
         // we can just call .unwrap() to assert this was a success
-        let res = init(&mut deps, env, msg).unwrap();
-        assert_eq!(0, res.messages.len());
-
-        // it worked, let's query the state
-        let res = query(&deps, QueryMsg::GetCount {}).unwrap();
-        let value: CountResponse = from_binary(&res).unwrap();
-        assert_eq!(17, value.count);
+        init(&mut deps, env, msg).unwrap();
     }
 
     #[test]
-    fn increment() {
-        let mut deps = mock_dependencies(20, &coins(2, "token"));
+    fn try_offer() {
+        let mut deps = mock_dependencies(20, &[]);
+        let msg = InitMsg {};
+        let env = mock_env("creator", &[]);
+        init(&mut deps, env, msg).unwrap();
 
-        let msg = InitMsg { count: 17 };
-        let env = mock_env("creator", &coins(2, "token"));
-        let _res = init(&mut deps, env, msg).unwrap();
+        let offer_id = 123;
+        let env = mock_env("offeror", &[]);
+        let msg = HandleMsg::MakeOffer {
+            id: offer_id,
+            offeror_nft: "offeror_nft".to_string(),
+            offeree_nft: "offeree_nft".to_string(),
+            offeror_hands: vec![1, 2, 3],
+            offeror_draw_point: 3,
+        };
 
-        // anyone can increment
-        let env = mock_env("anyone", &coins(2, "token"));
-        let msg = HandleMsg::Increment {};
-        let _res = handle(&mut deps, env, msg).unwrap();
+        // succeed
+        handle(&mut deps, env.clone(), msg.clone()).unwrap();
 
-        // should increase counter by 1
-        let res = query(&deps, QueryMsg::GetCount {}).unwrap();
-        let value: CountResponse = from_binary(&res).unwrap();
-        assert_eq!(18, value.count);
+        // failed by duplicated id
+        let res = handle(&mut deps, env, msg);
+        assert_eq!(
+            Some(StdError::generic_err(format!(
+                "duplicated id({})",
+                offer_id
+            ))),
+            res.err()
+        );
     }
 
     #[test]
-    fn reset() {
-        let mut deps = mock_dependencies(20, &coins(2, "token"));
+    fn try_accept() {
+        let mut deps = mock_dependencies(20, &[]);
+        let msg = InitMsg {};
+        let env = mock_env("creator", &[]);
+        init(&mut deps, env, msg).unwrap();
 
-        let msg = InitMsg { count: 17 };
-        let env = mock_env("creator", &coins(2, "token"));
-        let _res = init(&mut deps, env, msg).unwrap();
+        let offer_id = 123;
+        let env = mock_env("offeror", &[]);
+        let msg = HandleMsg::MakeOffer {
+            id: offer_id,
+            offeror_nft: "offeror_nft".to_string(),
+            offeree_nft: "offeree_nft".to_string(),
+            offeror_hands: vec![1, 2, 3],
+            offeror_draw_point: 3,
+        };
 
-        // not anyone can reset
-        let unauth_env = mock_env("anyone", &coins(2, "token"));
-        let msg = HandleMsg::Reset { count: 5 };
-        let res = handle(&mut deps, unauth_env, msg);
-        match res {
-            Err(StdError::Unauthorized { .. }) => {}
-            _ => panic!("Must return unauthorized error"),
+        handle(&mut deps, env.clone(), msg.clone()).unwrap();
+
+        let env = mock_env("offeree", &[]);
+        let msg = HandleMsg::AcceptOffer {
+            id: offer_id,
+            offeree_hands: vec![3, 2, 1],
+        };
+
+        let res = handle(&mut deps, env, msg).unwrap();
+        assert_eq!(1, res.messages.len());
+
+        let msg: CosmosMsg<CustomMsg> = CustomMsg::MatchResult {
+            winner: "draw".to_string(),
+            offeror_hands: vec![1, 2, 3],
+            offeree_hands: vec![3, 2, 1],
         }
-
-        // only the original creator can reset the counter
-        let auth_env = mock_env("creator", &coins(2, "token"));
-        let msg = HandleMsg::Reset { count: 5 };
-        let _res = handle(&mut deps, auth_env, msg).unwrap();
-
-        // should now be 5
-        let res = query(&deps, QueryMsg::GetCount {}).unwrap();
-        let value: CountResponse = from_binary(&res).unwrap();
-        assert_eq!(5, value.count);
+        .into();
+        assert_eq!(msg, res.messages[0]);
     }
 }
