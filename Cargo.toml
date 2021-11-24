@@ -1,5 +1,5 @@
 [package]
-name = "mysimplecounter"
+name = "janken"
 version = "0.1.0"
 authors = ["tak <re795h@gmail.com>"]
 edition = "2018"
