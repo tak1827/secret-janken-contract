@@ -1,4 +1,4 @@
-use cosmwasm_std::CosmosMsg;
+use cosmwasm_std::{HumanAddr, Uint128};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -10,8 +10,10 @@ pub struct InitMsg {}
 pub enum HandleMsg {
     MakeOffer {
         id: u64,
-        offeror_nft: String,
-        offeree_nft: String,
+        offeror_nft_contract: HumanAddr,
+        offeror_nft: Uint128,
+        offeree_nft_contract: HumanAddr,
+        offeree_nft: Uint128,
         offeror_hands: Vec<u8>,
         offeror_draw_point: u8,
     },
@@ -26,29 +28,12 @@ pub enum HandleMsg {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum CustomMsg {
-    MatchResult {
-        winner: String,
-        offeror_hands: Vec<u8>,
-        offeree_hands: Vec<u8>,
-    },
-}
-
-impl Into<CosmosMsg<CustomMsg>> for CustomMsg {
-    fn into(self) -> CosmosMsg<CustomMsg> {
-        CosmosMsg::Custom(self)
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
-    // GetCount returns the current count as a json-encoded number
-    GetCount {},
+    Offer { id: u64 },
 }
 
-// We define a custom struct for each query response
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct CountResponse {
-    pub count: i32,
-}
+// // We define a custom struct for each query response
+// #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+// pub struct CountResponse {
+//     pub count: i32,
+// }

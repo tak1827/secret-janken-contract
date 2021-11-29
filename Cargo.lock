@@ -112,6 +112,7 @@ dependencies = [
  "cosmwasm-std",
  "cosmwasm-storage",
  "schemars",
+ "secrete-nft",
  "serde",
  "snafu",
 ]
@@ -198,6 +199,19 @@ dependencies = [
  "quote",
  "serde_derive_internals",
  "syn",
+]
+
+[[package]]
+name = "secrete-nft"
+version = "0.1.0"
+source = "git+https://github.com/tak1827/secrete-nft#fabf57c99d2717c0cd49d230779fef9b4def612d"
+dependencies = [
+ "cosmwasm-std",
+ "cosmwasm-storage",
+ "schemars",
+ "serde",
+ "serde_json",
+ "snafu",
 ]
 
 [[package]]

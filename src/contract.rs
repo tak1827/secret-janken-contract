@@ -1,11 +1,13 @@
 use cosmwasm_std::{
-    debug_print, to_binary, Api, Binary, Context, Env, Extern, HandleResponse, InitResponse,
-    Querier, StdError, StdResult, Storage,
+    debug_print, to_binary, Api, Binary, Context, Env, Extern, HandleResponse, HumanAddr,
+    InitResponse, Querier, StdError, StdResult, Storage, Uint128, WasmMsg,
 };
 
+use secrete_nft::msg::HandleMsg as SecreteHandleMsg;
+
 use crate::hand::MatchResult;
-use crate::msg::{CountResponse, CustomMsg, HandleMsg, InitMsg, QueryMsg};
-use crate::state::{config_read, offers, offers_read, Offer};
+use crate::msg::{HandleMsg, InitMsg, QueryMsg};
+use crate::state::{offers, offers_read, Offer};
 
 pub fn init<S: Storage, A: Api, Q: Querier>(
     _deps: &mut Extern<S, A, Q>,
@@ -20,11 +22,13 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
     msg: HandleMsg,
-) -> StdResult<HandleResponse<CustomMsg>> {
+) -> StdResult<HandleResponse> {
     match msg {
         HandleMsg::MakeOffer {
             id,
+            offeror_nft_contract,
             offeror_nft,
+            offeree_nft_contract,
             offeree_nft,
             offeror_hands,
             offeror_draw_point,
@@ -32,7 +36,9 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
             deps,
             env,
             id,
+            offeror_nft_contract,
             offeror_nft,
+            offeree_nft_contract,
             offeree_nft,
             offeror_hands,
             offeror_draw_point,
@@ -46,21 +52,24 @@ pub fn try_offer<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
     id: u64,
-    offeror_nft: String,
-    offeree_nft: String,
+    offeror_nft_contract: HumanAddr,
+    offeror_nft: Uint128,
+    offeree_nft_contract: HumanAddr,
+    offeree_nft: Uint128,
     hands: Vec<u8>,
     draw_point: u8,
-) -> StdResult<HandleResponse<CustomMsg>> {
+) -> StdResult<HandleResponse> {
     match offers(&mut deps.storage).may_load(&id.to_be_bytes()) {
         Ok(None) => {}
         _ => return Err(StdError::generic_err(format!("duplicated id({})", id))),
     }
 
-    let sender_address_raw = deps.api.canonical_address(&env.message.sender)?;
     let offer = Offer::new(
         id,
-        sender_address_raw,
+        env.message.sender.clone(),
+        offeror_nft_contract,
         offeror_nft,
+        offeree_nft_contract,
         offeree_nft,
         hands,
         draw_point,
@@ -77,35 +86,51 @@ pub fn try_accept<S: Storage, A: Api, Q: Querier>(
     env: Env,
     id: u64,
     hands: Vec<u8>,
-) -> StdResult<HandleResponse<CustomMsg>> {
+) -> StdResult<HandleResponse> {
     let mut offer = offers(&mut deps.storage).load(&id.to_be_bytes())?;
-    let sender_address_raw = deps.api.canonical_address(&env.message.sender)?;
-    offer.accept_offer(sender_address_raw, hands);
-
-    offers(&mut deps.storage).update(&id.to_be_bytes(), |_| Ok(offer.clone()))?;
+    offer.accept_offer(env.message.sender.clone(), hands);
 
     let offeror_hands = &offer.offeror_hands;
     let offeree_hands = &offer.offeree_hands;
 
     let result = offeror_hands.compete(offeree_hands, offer.offeror_draw_point);
-    let winner = if result.eq(&MatchResult::Win) {
-        "offeree".to_string()
-    } else if result.eq(&MatchResult::Lose) {
-        "offeror".to_string()
-    } else {
-        "draw".to_string()
-    };
-
-    let msg = CustomMsg::MatchResult {
-        winner: winner.clone(),
-        offeror_hands: offeror_hands.to_u8_vec(),
-        offeree_hands: offeree_hands.to_u8_vec(),
-    };
 
     let mut ctx = Context::new();
     ctx.add_log("action", "competed");
-    ctx.add_log("winner", &winner);
-    ctx.add_message(msg);
+
+    if result.eq(&MatchResult::Win) {
+        offer.winner = "offeror".to_string();
+        let msg = to_binary(&SecreteHandleMsg::TransferFrom {
+            sender: offer.offeree.clone(),
+            recipient: offer.offeror.clone(),
+            token_id: offer.offeree_nft,
+        })?;
+        ctx.add_message(WasmMsg::Execute {
+            contract_addr: offer.offeree_nft_contract.clone(),
+            callback_code_hash: "".to_string(),
+            msg,
+            send: vec![],
+        });
+    } else if result.eq(&MatchResult::Lose) {
+        offer.winner = "offeree".to_string();
+        let msg = to_binary(&SecreteHandleMsg::TransferFrom {
+            sender: offer.offeror.clone(),
+            recipient: offer.offeree.clone(),
+            token_id: offer.offeror_nft,
+        })?;
+        ctx.add_message(WasmMsg::Execute {
+            contract_addr: offer.offeror_nft_contract.clone(),
+            callback_code_hash: "".to_string(),
+            msg,
+            send: vec![],
+        });
+    } else {
+        offer.winner = "draw".to_string();
+    };
+
+    ctx.add_log("winner", &offer.winner);
+
+    offers(&mut deps.storage).update(&id.to_be_bytes(), |_| Ok(offer.clone()))?;
 
     debug_print("successfully accepted");
     Ok(ctx.into())
@@ -115,10 +140,9 @@ pub fn try_decline<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
     id: u64,
-) -> StdResult<HandleResponse<CustomMsg>> {
+) -> StdResult<HandleResponse> {
     let mut offer = offers(&mut deps.storage).load(&id.to_be_bytes())?;
-    let sender_address_raw = deps.api.canonical_address(&env.message.sender)?;
-    offer.decline_offer(sender_address_raw);
+    offer.decline_offer(env.message.sender.clone());
 
     offers(&mut deps.storage).update(&id.to_be_bytes(), |_| Ok(offer))?;
 
@@ -131,13 +155,16 @@ pub fn query<S: Storage, A: Api, Q: Querier>(
     msg: QueryMsg,
 ) -> StdResult<Binary> {
     match msg {
-        QueryMsg::GetCount {} => to_binary(&query_count(deps)?),
+        QueryMsg::Offer { id } => query_offer(&deps, id),
     }
 }
 
-fn query_count<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> StdResult<CountResponse> {
-    let state = config_read(&deps.storage).load()?;
-    Ok(CountResponse { count: state.count })
+fn query_offer<S: Storage, A: Api, Q: Querier>(
+    deps: &Extern<S, A, Q>,
+    id: u64,
+) -> StdResult<Binary> {
+    let offer = offers_read(&deps.storage).may_load(&id.to_be_bytes());
+    to_binary(&offer)
 }
 
 #[cfg(test)]
@@ -145,6 +172,7 @@ mod tests {
     use super::*;
     use cosmwasm_std::testing::{mock_dependencies, mock_env};
     use cosmwasm_std::{CosmosMsg, StdError};
+    use secrete_nft::msg::HandleMsg as SecreteHandleMsg;
 
     #[test]
     fn proper_initialization() {
@@ -153,7 +181,6 @@ mod tests {
         let msg = InitMsg {};
         let env = mock_env("creator", &[]);
 
-        // we can just call .unwrap() to assert this was a success
         init(&mut deps, env, msg).unwrap();
     }
 
@@ -168,10 +195,12 @@ mod tests {
         let env = mock_env("offeror", &[]);
         let msg = HandleMsg::MakeOffer {
             id: offer_id,
-            offeror_nft: "offeror_nft".to_string(),
-            offeree_nft: "offeree_nft".to_string(),
+            offeror_nft_contract: "offeror_contract".into(),
+            offeror_nft: (1 as u64).into(),
+            offeree_nft_contract: "offeree_contract".into(),
+            offeree_nft: (1 as u64).into(),
             offeror_hands: vec![1, 2, 3],
-            offeror_draw_point: 3,
+            offeror_draw_point: 2,
         };
 
         // succeed
@@ -196,13 +225,17 @@ mod tests {
         init(&mut deps, env, msg).unwrap();
 
         let offer_id = 123;
+        let offeror_nft: u64 = 123;
+        let offeree_nft: u64 = 321;
         let env = mock_env("offeror", &[]);
         let msg = HandleMsg::MakeOffer {
             id: offer_id,
-            offeror_nft: "offeror_nft".to_string(),
-            offeree_nft: "offeree_nft".to_string(),
+            offeror_nft_contract: "offeror_contract".into(),
+            offeror_nft: offeror_nft.into(),
+            offeree_nft_contract: "offeree_contract".into(),
+            offeree_nft: offeree_nft.into(),
             offeror_hands: vec![1, 2, 3],
-            offeror_draw_point: 3,
+            offeror_draw_point: 2,
         };
 
         handle(&mut deps, env.clone(), msg.clone()).unwrap();
@@ -216,12 +249,20 @@ mod tests {
         let res = handle(&mut deps, env, msg).unwrap();
         assert_eq!(1, res.messages.len());
 
-        let msg: CosmosMsg<CustomMsg> = CustomMsg::MatchResult {
-            winner: "draw".to_string(),
-            offeror_hands: vec![1, 2, 3],
-            offeree_hands: vec![3, 2, 1],
+        let transfer_msg = to_binary(&SecreteHandleMsg::TransferFrom {
+            sender: "offeree".into(),
+            recipient: "offeror".into(),
+            token_id: offeree_nft.into(),
+        })
+        .unwrap();
+        let msg: CosmosMsg = WasmMsg::Execute {
+            contract_addr: "offeree_contract".into(),
+            callback_code_hash: "".to_string(),
+            msg: transfer_msg,
+            send: vec![],
         }
         .into();
+
         assert_eq!(msg, res.messages[0]);
     }
 }
