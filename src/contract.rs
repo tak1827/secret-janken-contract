@@ -26,6 +26,7 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
     match msg {
         HandleMsg::MakeOffer {
             id,
+            offeree,
             offeror_nft_contract,
             offeror_nft,
             offeree_nft_contract,
@@ -36,6 +37,7 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
             deps,
             env,
             id,
+            offeree,
             offeror_nft_contract,
             offeror_nft,
             offeree_nft_contract,
@@ -52,6 +54,7 @@ pub fn try_offer<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
     id: u64,
+    offeree: HumanAddr,
     offeror_nft_contract: HumanAddr,
     offeror_nft: String,
     offeree_nft_contract: HumanAddr,
@@ -67,6 +70,7 @@ pub fn try_offer<S: Storage, A: Api, Q: Querier>(
     let offer = Offer::new(
         id,
         env.message.sender.clone(),
+        offeree,
         offeror_nft_contract,
         offeror_nft,
         offeree_nft_contract,
@@ -199,6 +203,7 @@ mod tests {
         let env = mock_env("offeror", &[]);
         let msg = HandleMsg::MakeOffer {
             id: offer_id,
+            offeree: "offeree".into(),
             offeror_nft_contract: "offeror_contract".into(),
             offeror_nft: "1".to_string(),
             offeree_nft_contract: "offeree_contract".into(),
@@ -234,6 +239,7 @@ mod tests {
         let env = mock_env("offeror", &[]);
         let msg = HandleMsg::MakeOffer {
             id: offer_id,
+            offeree: "offeree".into(),
             offeror_nft_contract: "offeror_contract".into(),
             offeror_nft: offeror_nft,
             offeree_nft_contract: "offeree_contract".into(),

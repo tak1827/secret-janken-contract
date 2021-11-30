@@ -10,6 +10,7 @@ pub struct InitMsg {}
 pub enum HandleMsg {
     MakeOffer {
         id: u64,
+        offeree: HumanAddr,
         offeror_nft_contract: HumanAddr,
         offeror_nft: String,
         offeree_nft_contract: HumanAddr,

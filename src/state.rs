@@ -35,6 +35,7 @@ impl Offer {
     pub fn new(
         id: u64,
         offeror: HumanAddr,
+        offeree: HumanAddr,
         offeror_nft_contract: HumanAddr,
         offeror_nft: String,
         offeree_nft_contract: HumanAddr,
@@ -46,7 +47,7 @@ impl Offer {
             id: id,
             status: OfferStatus::Offered,
             offeror,
-            offeree: "".to_string().into(),
+            offeree,
             offeror_nft_contract,
             offeror_nft,
             offeree_nft_contract,
