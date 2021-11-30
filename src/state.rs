@@ -1,7 +1,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use cosmwasm_std::{HumanAddr, ReadonlyStorage, Storage, Uint128};
+use cosmwasm_std::{HumanAddr, ReadonlyStorage, Storage};
 use cosmwasm_storage::{bucket, bucket_read, Bucket, ReadonlyBucket};
 
 use crate::hand::{Hand, Hands};
@@ -22,9 +22,9 @@ pub struct Offer {
     pub offeror: HumanAddr,
     pub offeree: HumanAddr,
     pub offeror_nft_contract: HumanAddr,
-    pub offeror_nft: Uint128,
+    pub offeror_nft: String,
     pub offeree_nft_contract: HumanAddr,
-    pub offeree_nft: Uint128,
+    pub offeree_nft: String,
     pub offeror_hands: Hands,
     pub offeree_hands: Hands,
     pub offeror_draw_point: u8,
@@ -36,9 +36,9 @@ impl Offer {
         id: u64,
         offeror: HumanAddr,
         offeror_nft_contract: HumanAddr,
-        offeror_nft: Uint128,
+        offeror_nft: String,
         offeree_nft_contract: HumanAddr,
-        offeree_nft: Uint128,
+        offeree_nft: String,
         hands: Vec<u8>,
         draw_point: u8,
     ) -> Offer {

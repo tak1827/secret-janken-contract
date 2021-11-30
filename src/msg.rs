@@ -1,4 +1,4 @@
-use cosmwasm_std::{HumanAddr, Uint128};
+use cosmwasm_std::{HumanAddr};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -11,9 +11,9 @@ pub enum HandleMsg {
     MakeOffer {
         id: u64,
         offeror_nft_contract: HumanAddr,
-        offeror_nft: Uint128,
+        offeror_nft: String,
         offeree_nft_contract: HumanAddr,
-        offeree_nft: Uint128,
+        offeree_nft: String,
         offeror_hands: Vec<u8>,
         offeror_draw_point: u8,
     },
