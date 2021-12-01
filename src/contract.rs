@@ -1,13 +1,12 @@
 use cosmwasm_std::{
-    to_binary, Api, Binary, Context, Env, Extern, HandleResponse, HumanAddr,
-    InitResponse, Querier, StdError, StdResult, Storage, WasmMsg,
+    to_binary, Api, Binary, Context, Env, Extern, HandleResponse, HumanAddr, InitResponse, Querier,
+    StdError, StdResult, Storage, WasmMsg,
 };
 
 // use secrete_nft::msg::HandleMsg as SecreteHandleMsg;
-use snip721_reference_impl::msg::HandleMsg as Snip721HandleMsg;
 
 use crate::hand::MatchResult;
-use crate::msg::{HandleMsg, InitMsg, QueryMsg};
+use crate::msg::{HandleMsg, InitMsg, QueryMsg, Snip721HandleMsg};
 use crate::state::{offers, offers_read, Offer};
 
 pub fn init<S: Storage, A: Api, Q: Querier>(
@@ -45,7 +44,11 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
             offeror_hands,
             offeror_draw_point,
         ),
-        HandleMsg::AcceptOffer { id, offeree_hands } => try_accept(deps, env, id, offeree_hands),
+        HandleMsg::AcceptOffer {
+            id,
+            offeree_hands,
+            code_hash,
+        } => try_accept(deps, env, id, offeree_hands, code_hash),
         HandleMsg::DeclineOffer { id } => try_decline(deps, env, id),
     }
 }
@@ -89,6 +92,7 @@ pub fn try_accept<S: Storage, A: Api, Q: Querier>(
     env: Env,
     id: u64,
     hands: Vec<u8>,
+    code_hash: String,
 ) -> StdResult<HandleResponse> {
     let mut offer = offers(&mut deps.storage).load(&id.to_be_bytes())?;
     offer.accept_offer(env.message.sender.clone(), hands);
@@ -111,7 +115,7 @@ pub fn try_accept<S: Storage, A: Api, Q: Querier>(
         })?;
         ctx.add_message(WasmMsg::Execute {
             contract_addr: offer.offeree_nft_contract.clone(),
-            callback_code_hash: env.contract_code_hash,
+            callback_code_hash: code_hash,
             msg,
             send: vec![],
         });
@@ -130,7 +134,7 @@ pub fn try_accept<S: Storage, A: Api, Q: Querier>(
         // })?;
         ctx.add_message(WasmMsg::Execute {
             contract_addr: offer.offeror_nft_contract.clone(),
-            callback_code_hash: env.contract_code_hash,
+            callback_code_hash: code_hash,
             msg,
             send: vec![],
         });
@@ -180,7 +184,6 @@ mod tests {
     use super::*;
     use cosmwasm_std::testing::{mock_dependencies, mock_env};
     use cosmwasm_std::{CosmosMsg, StdError};
-    use snip721_reference_impl::msg::HandleMsg as Snip721HandleMsg;
 
     #[test]
     fn proper_initialization() {
@@ -254,6 +257,7 @@ mod tests {
         let msg = HandleMsg::AcceptOffer {
             id: offer_id,
             offeree_hands: vec![3, 2, 1],
+            code_hash: "".to_string(),
         };
 
         let res = handle(&mut deps, env, msg).unwrap();

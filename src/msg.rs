@@ -1,4 +1,4 @@
-use cosmwasm_std::{HumanAddr};
+use cosmwasm_std::HumanAddr;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -21,9 +21,25 @@ pub enum HandleMsg {
     AcceptOffer {
         id: u64,
         offeree_hands: Vec<u8>,
+        code_hash: String,
     },
     DeclineOffer {
         id: u64,
+    },
+}
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Snip721HandleMsg {
+    TransferNft {
+        /// recipient of the transfer
+        recipient: HumanAddr,
+        /// id of the token to transfer
+        token_id: String,
+        /// optional memo for the tx
+        memo: Option<String>,
+        /// optional message length padding
+        padding: Option<String>,
     },
 }
 
