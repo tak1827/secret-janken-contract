@@ -35,3 +35,10 @@ secretcli q tx $TX
 export OFFER=$(jq -n '{"offer":{"id":1}}')
 secretcli q compute query $CONTRACT "$OFFER"
 ```
+
+## Hands
+```
+Rock     = 1
+Paper    = 2
+Scissors = 3
+```
