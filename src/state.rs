@@ -29,7 +29,7 @@ pub struct Offer {
     pub offeree_code_hash: String,
     pub offeror_hands: Hands,
     pub offeree_hands: Hands,
-    pub offeror_draw_point: u8,
+    pub offeror_draw_point: i8,
     pub winner: String,
 }
 
@@ -45,7 +45,7 @@ impl Offer {
         offeree_nft: String,
         offeree_code_hash: String,
         hands: Vec<u8>,
-        draw_point: u8,
+        draw_point: i8,
     ) -> Offer {
         Offer {
             id: id,

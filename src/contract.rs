@@ -48,10 +48,7 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
             offeror_hands,
             offeror_draw_point,
         ),
-        HandleMsg::AcceptOffer {
-            id,
-            offeree_hands,
-        } => try_accept(deps, env, id, offeree_hands),
+        HandleMsg::AcceptOffer { id, offeree_hands } => try_accept(deps, env, id, offeree_hands),
         HandleMsg::DeclineOffer { id } => try_decline(deps, env, id),
     }
 }
@@ -68,7 +65,7 @@ pub fn try_offer<S: Storage, A: Api, Q: Querier>(
     offeree_nft: String,
     offeree_code_hash: String,
     hands: Vec<u8>,
-    draw_point: u8,
+    draw_point: i8,
 ) -> StdResult<HandleResponse> {
     match offers(&mut deps.storage).may_load(&id.to_be_bytes()) {
         Ok(None) => {}
@@ -258,7 +255,7 @@ mod tests {
             offeree_nft: offeree_nft.clone(),
             offeree_code_hash: "offeree_code_hash".to_string(),
             offeror_hands: vec![1, 2, 3],
-            offeror_draw_point: 2,
+            offeror_draw_point: -1,
         };
 
         handle(&mut deps, env.clone(), msg.clone()).unwrap();

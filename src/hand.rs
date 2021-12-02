@@ -42,18 +42,17 @@ impl From<&u8> for Hand {
 pub struct Hands(Vec<Hand>);
 
 impl Hands {
-    pub fn compete(&self, opponent: &Hands, draw_point: u8) -> MatchResult {
-        let mut point: u8 = 0;
+    pub fn compete(&self, opponent: &Hands, draw_point: i8) -> MatchResult {
+        let mut point: i8 = 0;
         let my_hands: Vec<Hand> = self.into();
         let opponent_hands: Vec<Hand> = opponent.into();
         for (i, my_hand) in my_hands.iter().enumerate() {
             let result = my_hand.compete(&opponent_hands[i]);
-            point += result.u8();
-            if point > draw_point {
-                return MatchResult::Win;
-            }
+            point += result.to_point();
         }
-        if point == draw_point {
+        if point > draw_point {
+            MatchResult::Win
+        } else if point == draw_point {
             MatchResult::Draw
         } else {
             MatchResult::Lose
@@ -100,8 +99,8 @@ pub enum MatchResult {
 }
 
 impl MatchResult {
-    fn u8(&self) -> u8 {
-        *self as u8
+    fn to_point(&self) -> i8 {
+        (*self as i8) - 1
     }
 }
 
@@ -133,12 +132,12 @@ mod tests {
         let player1: Hands = vec![Hand::Rock, Hand::Paper, Hand::Scissors, Hand::Rock].into();
         let player2: Hands = vec![Hand::Scissors, Hand::Paper, Hand::Rock, Hand::Scissors].into();
 
-        assert_eq!(MatchResult::Draw, player1.compete(&player2, 5));
-        assert_eq!(MatchResult::Win, player1.compete(&player2, 4));
-        assert_eq!(MatchResult::Lose, player1.compete(&player2, 6));
+        assert_eq!(MatchResult::Draw, player1.compete(&player2, 1));
+        assert_eq!(MatchResult::Win, player1.compete(&player2, 0));
+        assert_eq!(MatchResult::Lose, player1.compete(&player2, 2));
 
-        assert_eq!(MatchResult::Draw, player2.compete(&player1, 3));
-        assert_eq!(MatchResult::Win, player2.compete(&player1, 2));
-        assert_eq!(MatchResult::Lose, player2.compete(&player1, 4));
+        assert_eq!(MatchResult::Draw, player2.compete(&player1, -1));
+        assert_eq!(MatchResult::Win, player2.compete(&player1, -2));
+        assert_eq!(MatchResult::Lose, player2.compete(&player1, 0));
     }
 }

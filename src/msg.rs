@@ -18,7 +18,7 @@ pub enum HandleMsg {
         offeree_nft: String,
         offeree_code_hash: String,
         offeror_hands: Vec<u8>,
-        offeror_draw_point: u8,
+        offeror_draw_point: i8,
     },
     AcceptOffer {
         id: u64,
