@@ -26,10 +26,11 @@ the player specify variables
 }
 ```
 
-"offeror_code_hash" and offeree_code_hashcan be get like bellow command.
+`offeror_code_hash` and `offeree_code_hashcan` can be get like bellow command.
 ```sh
 secretcli q compute contract-hash $CONTRACT_ADDRESS
 ```
+As example, the snip721 contract code hash in `wasm/snip721.wasm.gz` is `6208b13151f8fba7a474c1b7dfced661a8aa2fb4769049fed8442e4cd1d7f1df`
 
 ### 2nd, Accept or Decline offer
 the opponent can accept or decline offer.
