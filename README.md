@@ -3,6 +3,7 @@ CosmWasm contract of gambling mini game (rock-paper-scissors)
 
 # How to play
 Walking through Janken contract. Taking 2 steps to play with.
+Before play, please take care that the biting nft have already approve Janken contract address
 
 ### 1st, Making offer
 a player offer a match to the opponent
