@@ -13,15 +13,16 @@ pub enum HandleMsg {
         offeree: HumanAddr,
         offeror_nft_contract: HumanAddr,
         offeror_nft: String,
+        offeror_code_hash: String,
         offeree_nft_contract: HumanAddr,
         offeree_nft: String,
+        offeree_code_hash: String,
         offeror_hands: Vec<u8>,
         offeror_draw_point: u8,
     },
     AcceptOffer {
         id: u64,
         offeree_hands: Vec<u8>,
-        code_hash: String,
     },
     DeclineOffer {
         id: u64,

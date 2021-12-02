@@ -28,8 +28,10 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
             offeree,
             offeror_nft_contract,
             offeror_nft,
+            offeror_code_hash,
             offeree_nft_contract,
             offeree_nft,
+            offeree_code_hash,
             offeror_hands,
             offeror_draw_point,
         } => try_offer(
@@ -38,17 +40,18 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
             id,
             offeree,
             offeror_nft_contract,
+            offeror_code_hash,
             offeror_nft,
             offeree_nft_contract,
             offeree_nft,
+            offeree_code_hash,
             offeror_hands,
             offeror_draw_point,
         ),
         HandleMsg::AcceptOffer {
             id,
             offeree_hands,
-            code_hash,
-        } => try_accept(deps, env, id, offeree_hands, code_hash),
+        } => try_accept(deps, env, id, offeree_hands),
         HandleMsg::DeclineOffer { id } => try_decline(deps, env, id),
     }
 }
@@ -60,8 +63,10 @@ pub fn try_offer<S: Storage, A: Api, Q: Querier>(
     offeree: HumanAddr,
     offeror_nft_contract: HumanAddr,
     offeror_nft: String,
+    offeror_code_hash: String,
     offeree_nft_contract: HumanAddr,
     offeree_nft: String,
+    offeree_code_hash: String,
     hands: Vec<u8>,
     draw_point: u8,
 ) -> StdResult<HandleResponse> {
@@ -76,8 +81,10 @@ pub fn try_offer<S: Storage, A: Api, Q: Querier>(
         offeree,
         offeror_nft_contract,
         offeror_nft,
+        offeror_code_hash,
         offeree_nft_contract,
         offeree_nft,
+        offeree_code_hash,
         hands,
         draw_point,
     );
@@ -92,7 +99,6 @@ pub fn try_accept<S: Storage, A: Api, Q: Querier>(
     env: Env,
     id: u64,
     hands: Vec<u8>,
-    code_hash: String,
 ) -> StdResult<HandleResponse> {
     let mut offer = offers(&mut deps.storage).load(&id.to_be_bytes())?;
     offer.accept_offer(env.message.sender.clone(), hands);
@@ -115,7 +121,7 @@ pub fn try_accept<S: Storage, A: Api, Q: Querier>(
         })?;
         ctx.add_message(WasmMsg::Execute {
             contract_addr: offer.offeree_nft_contract.clone(),
-            callback_code_hash: code_hash,
+            callback_code_hash: offer.offeree_code_hash.clone(),
             msg,
             send: vec![],
         });
@@ -134,7 +140,7 @@ pub fn try_accept<S: Storage, A: Api, Q: Querier>(
         // })?;
         ctx.add_message(WasmMsg::Execute {
             contract_addr: offer.offeror_nft_contract.clone(),
-            callback_code_hash: code_hash,
+            callback_code_hash: offer.offeror_code_hash.clone(),
             msg,
             send: vec![],
         });
@@ -209,8 +215,10 @@ mod tests {
             offeree: "offeree".into(),
             offeror_nft_contract: "offeror_contract".into(),
             offeror_nft: "1".to_string(),
+            offeror_code_hash: "offeror_code_hash".to_string(),
             offeree_nft_contract: "offeree_contract".into(),
             offeree_nft: "2".to_string(),
+            offeree_code_hash: "offeree_code_hash".to_string(),
             offeror_hands: vec![1, 2, 3],
             offeror_draw_point: 2,
         };
@@ -245,8 +253,10 @@ mod tests {
             offeree: "offeree".into(),
             offeror_nft_contract: "offeror_contract".into(),
             offeror_nft: offeror_nft,
+            offeror_code_hash: "offeror_code_hash".to_string(),
             offeree_nft_contract: "offeree_contract".into(),
             offeree_nft: offeree_nft.clone(),
+            offeree_code_hash: "offeree_code_hash".to_string(),
             offeror_hands: vec![1, 2, 3],
             offeror_draw_point: 2,
         };
@@ -257,7 +267,6 @@ mod tests {
         let msg = HandleMsg::AcceptOffer {
             id: offer_id,
             offeree_hands: vec![3, 2, 1],
-            code_hash: "".to_string(),
         };
 
         let res = handle(&mut deps, env, msg).unwrap();
@@ -272,7 +281,7 @@ mod tests {
         .unwrap();
         let msg: CosmosMsg = WasmMsg::Execute {
             contract_addr: "offeree_contract".into(),
-            callback_code_hash: "".to_string(),
+            callback_code_hash: "offeree_code_hash".to_string(),
             msg: transfer_msg,
             send: vec![],
         }
