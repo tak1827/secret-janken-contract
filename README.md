@@ -13,16 +13,16 @@ the player specify variables
 	make_offer: {
 		id:                   // offer uniq id
 		offeree:              // the player address
-	  offeror_nft_contract: // the nft contract address
-	  offeror_nft:          // the nft id
-	  offeror_code_hash:    // the hash of nft contract
-	  offeree_nft_contract: // ...
-	  offeree_nft:          // ...
-	  offeree_code_hash:    // ... 
-	  offeror_hands:        // the hand number, Rock=1, Paper=2, Scissors=3
-	  offeror_draw_point:   // the offeror win if he get more than this total point, win=1 point, draw=0 point, lose=-1 point
-	                        // Ex) if offeror win twice, draw once and lose once, then the total point is "1".
-  }
+		offeror_nft_contract: // the nft contract address
+		offeror_nft:          // the nft id
+		offeror_code_hash:    // the hash of nft contract
+		offeree_nft_contract: // ...
+		offeree_nft:          // ...
+		offeree_code_hash:    // ... 
+		offeror_hands:        // the array of hand numbers, Rock=1, Paper=2, Scissors=3
+		offeror_draw_point:   // the offeror win if he get more than this total point, win=1 point, draw=0 point, lose=-1 point
+	                              // Ex) if offeror win twice, draw once and lose once, then the total point is "1".
+	}
 }
 ```
 
@@ -38,9 +38,9 @@ In the case of accept, the opponent send his own hands
 ```javascript
 {
 	accept_offer: {
-    id:            // the uniq id of offer, should same as offerd one
-    offeree_hands: // the opponent hands
-  }
+    		id:            // the uniq id of offer, should same as offerd one
+    		offeree_hands: // the array of opponent hand numbers
+	}
 }
 ```
 
@@ -48,8 +48,8 @@ In the case of decline, just return the id
 ```javascript
 {
 	decline_offer: {
-    id:            // the uniq id of offer, should same as offerd one
-  }
+		id: // the uniq id of offer, should same as offerd one
+	}
 }
 ```
 
