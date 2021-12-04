@@ -4,7 +4,7 @@ use cosmwasm_std::{
 };
 
 use snip721_reference_impl::msg::{
-    Cw721OwnerOfResponse, HandleMsg as Cw721HandleMsg, QueryMsg as Cw721QueryMsg,
+    HandleMsg as Cw721HandleMsg, QueryAnswer, QueryMsg as Cw721QueryMsg,
 };
 
 use crate::hand::{Hand, Hands, MatchResult};
@@ -86,10 +86,10 @@ pub fn try_offer<S: Storage, A: Api, Q: Querier>(
         callback_code_hash: offeror_code_hash.clone(),
     });
 
-    let res = deps.querier.query::<Cw721OwnerOfResponse>(&query)?;
-    let owner = match res.owner {
-        Some(o) => o,
-        None => "".into(),
+    let res = deps.querier.query::<QueryAnswer>(&query)?;
+    let owner = match res {
+        QueryAnswer::OwnerOf { owner, .. } => owner,
+        _ => "".into(),
     };
 
     let offer = Offer::new(
