@@ -48,7 +48,7 @@ impl Offer {
         draw_point: i8,
     ) -> Offer {
         Offer {
-            id: id,
+            id,
             status: OfferStatus::Offered,
             offeror,
             offeree,

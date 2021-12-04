@@ -3,11 +3,9 @@ use cosmwasm_std::{
     StdError, StdResult, Storage, WasmMsg,
 };
 
-// use secrete_nft::msg::HandleMsg as SecreteHandleMsg;
-
-use crate::hand::MatchResult;
+use crate::hand::{Hand, Hands, MatchResult};
 use crate::msg::{HandleMsg, InitMsg, QueryMsg, Snip721HandleMsg};
-use crate::state::{offers, offers_read, Offer};
+use crate::state::{offers, offers_read, Offer, OfferStatus};
 
 pub fn init<S: Storage, A: Api, Q: Querier>(
     _deps: &mut Extern<S, A, Q>,
@@ -40,8 +38,8 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
             id,
             offeree,
             offeror_nft_contract,
-            offeror_code_hash,
             offeror_nft,
+            offeror_code_hash,
             offeree_nft_contract,
             offeree_nft,
             offeree_code_hash,
@@ -97,7 +95,8 @@ pub fn try_accept<S: Storage, A: Api, Q: Querier>(
     id: u64,
     hands: Vec<u8>,
 ) -> StdResult<HandleResponse> {
-    let mut offer = offers(&mut deps.storage).load(&id.to_be_bytes())?;
+    let mut offer = validate_offeree(deps, env.message.sender.clone(), id)?;
+
     offer.accept_offer(env.message.sender.clone(), hands);
 
     let offeror_hands = &offer.offeror_hands;
@@ -130,11 +129,6 @@ pub fn try_accept<S: Storage, A: Api, Q: Querier>(
             memo: None,
             padding: None,
         })?;
-        // let msg = to_binary(&SecreteHandleMsg::TransferFrom {
-        //     sender: offer.offeror.clone(),
-        //     recipient: offer.offeree.clone(),
-        //     token_id: offer.offeror_nft,
-        // })?;
         ctx.add_message(WasmMsg::Execute {
             contract_addr: offer.offeror_nft_contract.clone(),
             callback_code_hash: offer.offeror_code_hash.clone(),
@@ -157,12 +151,31 @@ pub fn try_decline<S: Storage, A: Api, Q: Querier>(
     env: Env,
     id: u64,
 ) -> StdResult<HandleResponse> {
-    let mut offer = offers(&mut deps.storage).load(&id.to_be_bytes())?;
+    let mut offer = validate_offeree(deps, env.message.sender.clone(), id)?;
     offer.decline_offer(env.message.sender.clone());
 
     offers(&mut deps.storage).update(&id.to_be_bytes(), |_| Ok(offer))?;
 
     Ok(HandleResponse::default())
+}
+
+fn validate_offeree<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    offeree: HumanAddr,
+    id: u64,
+) -> Result<Offer, StdError> {
+    let offer = match offers(&mut deps.storage).load(&id.to_be_bytes()) {
+        Ok(offer) => offer,
+        Err(err) => return Err(StdError::generic_err(format!("invalid id: {:?}", err))),
+    };
+
+    if &offer.offeree != &offeree {
+        return Err(StdError::generic_err(format!(
+            "msg sender is not offeree({})",
+            &offer.offeree
+        )));
+    }
+    Ok(offer)
 }
 
 pub fn query<S: Storage, A: Api, Q: Querier>(
@@ -178,8 +191,15 @@ fn query_offer<S: Storage, A: Api, Q: Querier>(
     deps: &Extern<S, A, Q>,
     id: u64,
 ) -> StdResult<Binary> {
-    let offer = offers_read(&deps.storage).may_load(&id.to_be_bytes());
-    to_binary(&offer)
+    match offers_read(&deps.storage).may_load(&id.to_be_bytes()) {
+        Ok(Some(mut o)) => {
+            if o.status == OfferStatus::Offered {
+                o.offeror_hands = Vec::<Hand>::new().into();
+            }
+            return to_binary(&o);
+        }
+        _ => return to_binary(""),
+    };
 }
 
 #[cfg(test)]
@@ -232,6 +252,28 @@ mod tests {
             ))),
             res.err()
         );
+
+        // check query
+        let msg = QueryMsg::Offer { id: offer_id };
+        let res = query(&deps, msg);
+        let expected = to_binary(&Offer {
+            id: offer_id,
+            status: OfferStatus::Offered,
+            offeror: "offeror".into(),
+            offeree: "offeree".into(),
+            offeror_nft_contract: "offeror_contract".into(),
+            offeror_nft: "1".to_string(),
+            offeror_code_hash: "offeror_code_hash".to_string(),
+            offeree_nft_contract: "offeree_contract".into(),
+            offeree_nft: "2".to_string(),
+            offeree_code_hash: "offeree_code_hash".to_string(),
+            offeror_hands: Vec::<Hand>::new().into(),
+            offeree_hands: Vec::<Hand>::new().into(),
+            offeror_draw_point: 2,
+            winner: "".to_string(),
+        });
+
+        assert_eq!(expected, res);
     }
 
     #[test]
@@ -249,7 +291,7 @@ mod tests {
             id: offer_id,
             offeree: "offeree".into(),
             offeror_nft_contract: "offeror_contract".into(),
-            offeror_nft: offeror_nft,
+            offeror_nft: offeror_nft.clone(),
             offeror_code_hash: "offeror_code_hash".to_string(),
             offeree_nft_contract: "offeree_contract".into(),
             offeree_nft: offeree_nft.clone(),
@@ -271,7 +313,7 @@ mod tests {
 
         let transfer_msg = to_binary(&Snip721HandleMsg::TransferNft {
             recipient: "offeror".into(),
-            token_id: offeree_nft,
+            token_id: offeree_nft.clone(),
             memo: None,
             padding: None,
         })
@@ -285,5 +327,32 @@ mod tests {
         .into();
 
         assert_eq!(msg, res.messages[0]);
+
+        // check query
+        let msg = QueryMsg::Offer { id: offer_id };
+        let res = query(&deps, msg);
+        let expected = to_binary(&Offer {
+            id: offer_id,
+            status: OfferStatus::Accepted,
+            offeror: "offeror".into(),
+            offeree: "offeree".into(),
+            offeror_nft_contract: "offeror_contract".into(),
+            offeror_nft: offeror_nft.clone(),
+            offeror_code_hash: "offeror_code_hash".to_string(),
+            offeree_nft_contract: "offeree_contract".into(),
+            offeree_nft: offeree_nft.clone(),
+            offeree_code_hash: "offeree_code_hash".to_string(),
+            offeror_hands: vec![Hand::Rock, Hand::Paper, Hand::Scissors].into(),
+            offeree_hands: vec![Hand::Scissors, Hand::Paper, Hand::Rock].into(),
+            offeror_draw_point: -1,
+            winner: "offeror".to_string(),
+        });
+
+        assert_eq!(expected, res);
     }
+
+    // #[test]
+    // fn query_offer() {
+
+    // }
 }
