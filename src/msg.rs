@@ -29,29 +29,8 @@ pub enum HandleMsg {
     },
 }
 
-#[derive(Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum Snip721HandleMsg {
-    TransferNft {
-        /// recipient of the transfer
-        recipient: HumanAddr,
-        /// id of the token to transfer
-        token_id: String,
-        /// optional memo for the tx
-        memo: Option<String>,
-        /// optional message length padding
-        padding: Option<String>,
-    },
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     Offer { id: u64 },
 }
-
-// // We define a custom struct for each query response
-// #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-// pub struct CountResponse {
-//     pub count: i32,
-// }

@@ -1,10 +1,14 @@
 use cosmwasm_std::{
     to_binary, Api, Binary, Context, Env, Extern, HandleResponse, HumanAddr, InitResponse, Querier,
-    StdError, StdResult, Storage, WasmMsg,
+    QueryRequest, StdError, StdResult, Storage, WasmMsg, WasmQuery,
+};
+
+use snip721_reference_impl::msg::{
+    Cw721OwnerOfResponse, HandleMsg as Cw721HandleMsg, QueryMsg as Cw721QueryMsg,
 };
 
 use crate::hand::{Hand, Hands, MatchResult};
-use crate::msg::{HandleMsg, InitMsg, QueryMsg, Snip721HandleMsg};
+use crate::msg::{HandleMsg, InitMsg, QueryMsg};
 use crate::state::{offers, offers_read, Offer, OfferStatus};
 
 pub fn init<S: Storage, A: Api, Q: Querier>(
@@ -70,6 +74,24 @@ pub fn try_offer<S: Storage, A: Api, Q: Querier>(
         _ => return Err(StdError::generic_err(format!("duplicated id({})", id))),
     }
 
+    let req = Cw721QueryMsg::OwnerOf {
+        token_id: offeror_nft.clone(),
+        viewer: None,
+        include_expired: None,
+    };
+
+    let query = QueryRequest::Wasm(WasmQuery::Smart {
+        contract_addr: offeror_nft_contract.clone(),
+        msg: to_binary(&req)?,
+        callback_code_hash: offeror_code_hash.clone(),
+    });
+
+    let res = deps.querier.query::<Cw721OwnerOfResponse>(&query)?;
+    let owner = match res.owner {
+        Some(o) => o,
+        None => "".into(),
+    };
+
     let offer = Offer::new(
         id,
         env.message.sender.clone(),
@@ -79,7 +101,7 @@ pub fn try_offer<S: Storage, A: Api, Q: Querier>(
         offeror_code_hash,
         offeree_nft_contract,
         offeree_nft,
-        offeree_code_hash,
+        owner.to_string(),
         hands,
         draw_point,
     );
@@ -109,7 +131,7 @@ pub fn try_accept<S: Storage, A: Api, Q: Querier>(
 
     if result.eq(&MatchResult::Win) {
         offer.winner = "offeror".to_string();
-        let msg = to_binary(&Snip721HandleMsg::TransferNft {
+        let msg = to_binary(&Cw721HandleMsg::TransferNft {
             recipient: offer.offeror.clone(),
             token_id: offer.offeree_nft.clone(),
             memo: None,
@@ -123,7 +145,7 @@ pub fn try_accept<S: Storage, A: Api, Q: Querier>(
         });
     } else if result.eq(&MatchResult::Lose) {
         offer.winner = "offeree".to_string();
-        let msg = to_binary(&Snip721HandleMsg::TransferNft {
+        let msg = to_binary(&Cw721HandleMsg::TransferNft {
             recipient: offer.offeree.clone(),
             token_id: offer.offeror_nft.clone(),
             memo: None,
@@ -311,7 +333,7 @@ mod tests {
         let res = handle(&mut deps, env, msg).unwrap();
         assert_eq!(1, res.messages.len());
 
-        let transfer_msg = to_binary(&Snip721HandleMsg::TransferNft {
+        let transfer_msg = to_binary(&Cw721HandleMsg::TransferNft {
             recipient: "offeror".into(),
             token_id: offeree_nft.clone(),
             memo: None,
