@@ -2,6 +2,7 @@ pub mod contract;
 pub mod hand;
 pub mod msg;
 pub mod state;
+mod validation;
 
 #[cfg(target_arch = "wasm32")]
 mod wasm {

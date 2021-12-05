@@ -1,15 +1,14 @@
 use cosmwasm_std::{
     to_binary, Api, Binary, Context, Env, Extern, HandleResponse, HumanAddr, InitResponse, Querier,
-    QueryRequest, StdError, StdResult, Storage, WasmMsg, WasmQuery,
+    StdResult, Storage, WasmMsg,
 };
 
-use snip721_reference_impl::msg::{
-    HandleMsg as Cw721HandleMsg, QueryAnswer, QueryMsg as Cw721QueryMsg,
-};
+use snip721_reference_impl::msg::HandleMsg as Cw721HandleMsg;
 
-use crate::hand::{Hand, Hands, MatchResult};
+use crate::hand::{Hand, MatchResult};
 use crate::msg::{HandleMsg, InitMsg, QueryMsg};
 use crate::state::{offers, offers_read, Offer, OfferStatus};
+use crate::validation::{validate_nft, validate_offer_id, validate_offeree};
 
 pub fn init<S: Storage, A: Api, Q: Querier>(
     _deps: &mut Extern<S, A, Q>,
@@ -69,28 +68,21 @@ pub fn try_offer<S: Storage, A: Api, Q: Querier>(
     hands: Vec<u8>,
     draw_point: i8,
 ) -> StdResult<HandleResponse> {
-    match offers(&mut deps.storage).may_load(&id.to_be_bytes()) {
-        Ok(None) => {}
-        _ => return Err(StdError::generic_err(format!("duplicated id({})", id))),
-    }
-
-    let req = Cw721QueryMsg::OwnerOf {
-        token_id: offeror_nft.clone(),
-        viewer: None,
-        include_expired: None,
-    };
-
-    let query = QueryRequest::Wasm(WasmQuery::Smart {
-        contract_addr: offeror_nft_contract.clone(),
-        msg: to_binary(&req)?,
-        callback_code_hash: offeror_code_hash.clone(),
-    });
-
-    let res = deps.querier.query::<QueryAnswer>(&query)?;
-    let owner = match res {
-        QueryAnswer::OwnerOf { owner, .. } => owner,
-        _ => "".into(),
-    };
+    validate_offer_id(&deps, id)?;
+    validate_nft(
+        &deps,
+        offeror_nft_contract.clone(),
+        offeror_nft.clone(),
+        offeror_code_hash.clone(),
+        env.message.sender.clone(),
+    )?;
+    validate_nft(
+        &deps,
+        offeree_nft_contract.clone(),
+        offeree_nft.clone(),
+        offeree_code_hash.clone(),
+        offeree.clone(),
+    )?;
 
     let offer = Offer::new(
         id,
@@ -101,14 +93,16 @@ pub fn try_offer<S: Storage, A: Api, Q: Querier>(
         offeror_code_hash,
         offeree_nft_contract,
         offeree_nft,
-        owner.to_string(),
+        offeree_code_hash,
         hands,
         draw_point,
     );
 
     offers(&mut deps.storage).save(&id.to_be_bytes(), &offer)?;
 
-    Ok(HandleResponse::default())
+    let mut ctx = Context::new();
+    ctx.add_log("action", "offered");
+    Ok(ctx.into())
 }
 
 pub fn try_accept<S: Storage, A: Api, Q: Querier>(
@@ -120,50 +114,53 @@ pub fn try_accept<S: Storage, A: Api, Q: Querier>(
     let mut offer = validate_offeree(deps, env.message.sender.clone(), id)?;
 
     offer.accept_offer(env.message.sender.clone(), hands);
-
     let offeror_hands = &offer.offeror_hands;
     let offeree_hands = &offer.offeree_hands;
 
+    let mut ctx = Context::new();
+    ctx.add_log("action", "accepted");
+
     let result = offeror_hands.compete(offeree_hands, offer.offeror_draw_point);
 
-    let mut ctx = Context::new();
-    ctx.add_log("action", "competed");
-
-    if result.eq(&MatchResult::Win) {
-        offer.winner = "offeror".to_string();
-        let msg = to_binary(&Cw721HandleMsg::TransferNft {
-            recipient: offer.offeror.clone(),
-            token_id: offer.offeree_nft.clone(),
-            memo: None,
-            padding: None,
-        })?;
-        ctx.add_message(WasmMsg::Execute {
-            contract_addr: offer.offeree_nft_contract.clone(),
-            callback_code_hash: offer.offeree_code_hash.clone(),
-            msg,
-            send: vec![],
-        });
-    } else if result.eq(&MatchResult::Lose) {
-        offer.winner = "offeree".to_string();
-        let msg = to_binary(&Cw721HandleMsg::TransferNft {
-            recipient: offer.offeree.clone(),
-            token_id: offer.offeror_nft.clone(),
-            memo: None,
-            padding: None,
-        })?;
-        ctx.add_message(WasmMsg::Execute {
-            contract_addr: offer.offeror_nft_contract.clone(),
-            callback_code_hash: offer.offeror_code_hash.clone(),
-            msg,
-            send: vec![],
-        });
-    } else {
+    if result.eq(&MatchResult::Draw) {
         offer.winner = "draw".to_string();
-    };
+    } else {
+        offer.winner = if result.eq(&MatchResult::Win) {
+            "offeror".to_string()
+        } else {
+            "offeree".to_string()
+        };
+        let msg = to_binary(&Cw721HandleMsg::TransferNft {
+            recipient: if result.eq(&MatchResult::Win) {
+                offer.offeror.clone()
+            } else {
+                offer.offeree.clone()
+            },
+            token_id: if result.eq(&MatchResult::Win) {
+                offer.offeree_nft.clone()
+            } else {
+                offer.offeree_nft.clone()
+            },
+            memo: None,
+            padding: None,
+        })?;
+        ctx.add_message(WasmMsg::Execute {
+            contract_addr: if result.eq(&MatchResult::Win) {
+                offer.offeree_nft_contract.clone()
+            } else {
+                offer.offeror_nft_contract.clone()
+            },
+            callback_code_hash: if result.eq(&MatchResult::Win) {
+                offer.offeree_code_hash.clone()
+            } else {
+                offer.offeror_code_hash.clone()
+            },
+            msg,
+            send: vec![],
+        });
+    }
 
-    ctx.add_log("winner", &offer.winner);
-
-    offers(&mut deps.storage).update(&id.to_be_bytes(), |_| Ok(offer.clone()))?;
+    offers(&mut deps.storage).update(&id.to_be_bytes(), |_| Ok(offer))?;
 
     Ok(ctx.into())
 }
@@ -174,30 +171,13 @@ pub fn try_decline<S: Storage, A: Api, Q: Querier>(
     id: u64,
 ) -> StdResult<HandleResponse> {
     let mut offer = validate_offeree(deps, env.message.sender.clone(), id)?;
-    offer.decline_offer(env.message.sender.clone());
 
+    offer.decline_offer(env.message.sender.clone());
     offers(&mut deps.storage).update(&id.to_be_bytes(), |_| Ok(offer))?;
 
-    Ok(HandleResponse::default())
-}
-
-fn validate_offeree<S: Storage, A: Api, Q: Querier>(
-    deps: &mut Extern<S, A, Q>,
-    offeree: HumanAddr,
-    id: u64,
-) -> Result<Offer, StdError> {
-    let offer = match offers(&mut deps.storage).load(&id.to_be_bytes()) {
-        Ok(offer) => offer,
-        Err(err) => return Err(StdError::generic_err(format!("invalid id: {:?}", err))),
-    };
-
-    if &offer.offeree != &offeree {
-        return Err(StdError::generic_err(format!(
-            "msg sender is not offeree({})",
-            &offer.offeree
-        )));
-    }
-    Ok(offer)
+    let mut ctx = Context::new();
+    ctx.add_log("action", "declined");
+    Ok(ctx.into())
 }
 
 pub fn query<S: Storage, A: Api, Q: Querier>(
