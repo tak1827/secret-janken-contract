@@ -3,7 +3,9 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-pub struct InitMsg {}
+pub struct InitMsg {
+    pub prng_seed: String,
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -27,10 +29,18 @@ pub enum HandleMsg {
     DeclineOffer {
         id: u64,
     },
+    GenerateViewingKey {
+        entropy: String,
+        padding: Option<String>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
-    Offer { id: u64 },
+    Offer {
+        id: u64,
+        address: HumanAddr,
+        viewing_key: String,
+    },
 }

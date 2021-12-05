@@ -1,12 +1,30 @@
+use cosmwasm_std::{CanonicalAddr, HumanAddr, ReadonlyStorage, Storage};
+use cosmwasm_storage::{
+    bucket, bucket_read, singleton, singleton_read, Bucket, PrefixedStorage, ReadonlyBucket,
+    ReadonlyPrefixedStorage, ReadonlySingleton, Singleton,
+};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use cosmwasm_std::{HumanAddr, ReadonlyStorage, Storage};
-use cosmwasm_storage::{bucket, bucket_read, Bucket, ReadonlyBucket};
-
 use crate::hand::{Hand, Hands};
+use crate::viewing_key::ViewingKey;
 
+pub const CONFIG_KEY: &[u8] = b"config";
 pub const PREFIX_OFFERS: &[u8] = b"offers";
+pub const PREFIX_VIEWING_KEY: &[u8] = b"viewingkey";
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct State {
+    pub prng_seed: Vec<u8>,
+}
+
+pub fn config<S: Storage>(storage: &mut S) -> Singleton<S, State> {
+    singleton(storage, CONFIG_KEY)
+}
+
+pub fn config_read<S: Storage>(storage: &S) -> ReadonlySingleton<S, State> {
+    singleton_read(storage, CONFIG_KEY)
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub enum OfferStatus {
@@ -83,4 +101,14 @@ pub fn offers<S: Storage>(storage: &mut S) -> Bucket<S, Offer> {
 
 pub fn offers_read<S: ReadonlyStorage>(storage: &S) -> ReadonlyBucket<S, Offer> {
     bucket_read(PREFIX_OFFERS, storage)
+}
+
+pub fn write_viewing_key<S: Storage>(store: &mut S, owner: &CanonicalAddr, key: &ViewingKey) {
+    let mut user_key_store = PrefixedStorage::new(PREFIX_VIEWING_KEY, store);
+    user_key_store.set(owner.as_slice(), &key.to_hashed());
+}
+
+pub fn read_viewing_key<S: Storage>(store: &S, owner: &CanonicalAddr) -> Option<Vec<u8>> {
+    let user_key_store = ReadonlyPrefixedStorage::new(PREFIX_VIEWING_KEY, store);
+    user_key_store.get(owner.as_slice())
 }
