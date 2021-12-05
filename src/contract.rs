@@ -256,9 +256,40 @@ fn query_offer<S: Storage, A: Api, Q: Querier>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mock::mock_dependencies;
-    use cosmwasm_std::testing::mock_env;
-    use cosmwasm_std::{CosmosMsg, StdError, SystemError};
+    use crate::mock::{mock_dependencies, MockQuerier};
+    use cosmwasm_std::testing::{mock_env, MockApi, MockStorage};
+    use cosmwasm_std::{CosmosMsg, Extern, StdError, SystemError};
+    use std::collections::HashMap;
+
+    fn initialize() -> Extern<MockStorage, MockApi, MockQuerier> {
+        let owners = HashMap::from([
+            ("nft_id_1".to_string(), HumanAddr("nft_owner_1".to_string())),
+            ("nft_id_2".to_string(), HumanAddr("nft_owner_2".to_string())),
+            ("nft_id_3".to_string(), HumanAddr("nft_owner_3".to_string())),
+        ]);
+
+        let mut deps = mock_dependencies(0, &[], Some(owners));
+        let msg = InitMsg {
+            prng_seed: "prng_seed".to_string(),
+        };
+        init(&mut deps, mock_env("creator", &[]), msg).unwrap();
+        deps
+    }
+
+    fn valid_sample_offer_msg(id: u64) -> HandleMsg {
+        HandleMsg::MakeOffer {
+            id,
+            offeree: "nft_owner_2".into(),
+            offeror_nft_contract: "contract".into(),
+            offeror_nft: "nft_id_1".to_string(),
+            offeror_code_hash: "code_hash".to_string(),
+            offeree_nft_contract: "contract".into(),
+            offeree_nft: "nft_id_2".to_string(),
+            offeree_code_hash: "code_hash".to_string(),
+            offeror_hands: vec![1, 2, 3],
+            offeror_draw_point: 2,
+        }
+    }
 
     #[test]
     fn proper_initialization() {
@@ -269,63 +300,44 @@ mod tests {
         init(&mut deps, mock_env("creator", &[]), msg).unwrap();
     }
 
-    // #[test]
-    // fn try_offer() {
-    //     let mut deps = mock_dependencies(20, &[]);
-    //     let msg = InitMsg {};
-    //     let env = mock_env("creator", &[]);
-    //     init(&mut deps, env, msg).unwrap();
+    #[test]
+    fn try_offer() {
+        let mut deps = initialize();
 
-    //     let offer_id = 123;
-    //     let env = mock_env("offeror", &[]);
-    //     let msg = HandleMsg::MakeOffer {
-    //         id: offer_id,
-    //         offeree: "offeree".into(),
-    //         offeror_nft_contract: "offeror_contract".into(),
-    //         offeror_nft: "1".to_string(),
-    //         offeror_code_hash: "offeror_code_hash".to_string(),
-    //         offeree_nft_contract: "offeree_contract".into(),
-    //         offeree_nft: "2".to_string(),
-    //         offeree_code_hash: "offeree_code_hash".to_string(),
-    //         offeror_hands: vec![1, 2, 3],
-    //         offeror_draw_point: 2,
-    //     };
+        let offer_id = 100;
+        let env = mock_env("nft_owner_1", &[]);
+        let msg = valid_sample_offer_msg(offer_id);
 
-    //     // succeed
-    //     handle(&mut deps, env.clone(), msg.clone()).unwrap();
+        // succeed
+        handle(&mut deps, env.clone(), msg.clone()).unwrap();
 
-    //     // failed by duplicated id
-    //     let res = handle(&mut deps, env, msg);
-    //     assert_eq!(
-    //         Some(StdError::generic_err(format!(
-    //             "duplicated id({})",
-    //             offer_id
-    //         ))),
-    //         res.err()
-    //     );
+        // failed by duplicated id
+        let res = handle(&mut deps, env.clone(), msg);
+        assert_eq!(
+            Some(StdError::generic_err(format!(
+                "duplicated id({})",
+                offer_id
+            ))),
+            res.err()
+        );
 
-    //     // check query
-    //     let msg = QueryMsg::Offer { id: offer_id };
-    //     let res = query(&deps, msg);
-    //     let expected = to_binary(&Offer {
-    //         id: offer_id,
-    //         status: OfferStatus::Offered,
-    //         offeror: "offeror".into(),
-    //         offeree: "offeree".into(),
-    //         offeror_nft_contract: "offeror_contract".into(),
-    //         offeror_nft: "1".to_string(),
-    //         offeror_code_hash: "offeror_code_hash".to_string(),
-    //         offeree_nft_contract: "offeree_contract".into(),
-    //         offeree_nft: "2".to_string(),
-    //         offeree_code_hash: "offeree_code_hash".to_string(),
-    //         offeror_hands: Vec::<Hand>::new().into(),
-    //         offeree_hands: Vec::<Hand>::new().into(),
-    //         offeror_draw_point: 2,
-    //         winner: "".to_string(),
-    //     });
+        // failed by invalid nft_id
+        let msg = HandleMsg::MakeOffer {
+            id: offer_id + 1,
+            offeree: "nft_owner_2".into(),
+            offeror_nft_contract: "contract".into(),
+            offeror_nft: "invalid_nft_id".to_string(),
+            offeror_code_hash: "code_hash".to_string(),
+            offeree_nft_contract: "contract".into(),
+            offeree_nft: "nft_id_2".to_string(),
+            offeree_code_hash: "code_hash".to_string(),
+            offeror_hands: vec![1, 2, 3],
+            offeror_draw_point: 2,
+        };
 
-    //     assert_eq!(expected, res);
-    // }
+        let res = handle(&mut deps, env, msg);
+        assert_eq!(true, res.is_err());
+    }
 
     // #[test]
     // fn try_accept() {
