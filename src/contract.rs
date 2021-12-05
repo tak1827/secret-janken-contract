@@ -256,12 +256,13 @@ fn query_offer<S: Storage, A: Api, Q: Querier>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cosmwasm_std::testing::{mock_dependencies, mock_env};
-    use cosmwasm_std::{CosmosMsg, StdError};
+    use crate::mock::mock_dependencies;
+    use cosmwasm_std::testing::mock_env;
+    use cosmwasm_std::{CosmosMsg, StdError, SystemError};
 
     #[test]
     fn proper_initialization() {
-        let mut deps = mock_dependencies(0, &[]);
+        let mut deps = mock_dependencies(0, &[], None);
         let msg = InitMsg {
             prng_seed: "prng_seed".to_string(),
         };

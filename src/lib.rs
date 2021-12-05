@@ -1,5 +1,6 @@
 pub mod contract;
 pub mod hand;
+mod mock;
 pub mod msg;
 pub mod state;
 mod utils;
