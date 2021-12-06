@@ -1,11 +1,13 @@
 pub mod contract;
 pub mod hand;
-mod mock;
 pub mod msg;
 pub mod state;
 mod utils;
 mod validation;
 mod viewing_key;
+
+#[cfg(not(target_arch = "wasm32"))]
+mod mock;
 
 #[cfg(target_arch = "wasm32")]
 mod wasm {
