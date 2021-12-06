@@ -1,9 +1,9 @@
 use cosmwasm_std::{
     to_binary, Api, Extern, HumanAddr, Querier, QueryRequest, StdError, Storage, WasmQuery,
 };
+// use snip721_reference_impl::msg::{QueryAnswer, QueryMsg as Cw721QueryMsg};
 
-use snip721_reference_impl::msg::{QueryAnswer, QueryMsg as Cw721QueryMsg};
-
+use crate::msg_cw721::{QueryAnswer, QueryMsg as Cw721QueryMsg};
 use crate::state::{offers, offers_read, Offer};
 
 pub fn validate_offer_id<S: Storage, A: Api, Q: Querier>(

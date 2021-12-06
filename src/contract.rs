@@ -3,10 +3,11 @@ use cosmwasm_std::{
     Order, Querier, StdResult, Storage, WasmMsg, KV,
 };
 use secret_toolkit::crypto::sha_256;
-use snip721_reference_impl::msg::HandleMsg as Cw721HandleMsg;
+// use snip721_reference_impl::msg::HandleMsg as Cw721HandleMsg;
 
 use crate::hand::{Hand, MatchResult};
 use crate::msg::{HandleMsg, InitMsg, OffersResponse, QueryMsg};
+use crate::msg_cw721::HandleMsg as Cw721HandleMsg;
 use crate::state::{
     config, config_read, offers, offers_read, read_viewing_key, write_viewing_key, Offer,
     OfferStatus, State,

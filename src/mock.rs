@@ -3,8 +3,10 @@ use cosmwasm_std::{
     from_binary, from_slice, to_binary, Coin, Empty, Extern, HumanAddr, Querier, QuerierResult,
     QueryRequest, SystemError, WasmQuery,
 };
-use snip721_reference_impl::msg::{QueryAnswer, QueryMsg as Cw721QueryMsg};
+// use snip721_reference_impl::msg::{QueryAnswer, QueryMsg as Cw721QueryMsg};
 use std::collections::HashMap;
+
+use crate::msg_cw721::{QueryAnswer, QueryMsg as Cw721QueryMsg};
 
 pub fn mock_dependencies(
     _contract_balance: &[Coin],

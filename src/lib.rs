@@ -1,6 +1,7 @@
 pub mod contract;
 pub mod hand;
 pub mod msg;
+mod msg_cw721;
 pub mod state;
 mod utils;
 mod validation;
