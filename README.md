@@ -66,8 +66,8 @@ secretcli tx compute store ./contract.wasm.gz --from alice --gas 10000000 -y
 secretcli query compute list-code
 
 # init
-export INIT=$(jq -n '{}')
-export RES=$(secretcli tx compute instantiate 10 "$INIT" --from alice --label janken10 -y --gas 1000000)
+export INIT=$(jq -n '{"prng_seed": "rng_source"}')
+export RES=$(secretcli tx compute instantiate 1 "$INIT" --from alice --label janken1 -y --gas 1000000)
 export TX=$(echo $RES | jq -r '.txhash')
 export RES=$(secretcli q tx $TX)
 export CONTRACT=$(echo $RES | jq -r '.logs[0].events[1].attributes[0].value')
@@ -75,7 +75,7 @@ export CONTRACT=$(echo $RES | jq -r '.logs[0].events[1].attributes[0].value')
 
 # make offer
 secretcli q compute contract-hash $CONTRACT
-export MAKEOFFER="{\"make_offer\":{\"id\": 1, \"offeree\": \"$(secretcli keys show bob -a)\", \"offeror_nft_contract\": \"secret1dp972qfjp362m7slfjsvzg6w72ky5reu5he4es\", \"offeror_nft\": \"optional_ID_of_new_token\", \"offeror_code_hash\": \"6208b13151f8fba7a474c1b7dfced661a8aa2fb4769049fed8442e4cd1d7f1df\", \"offeree_nft_contract\": \"secret1dp972qfjp362m7slfjsvzg6w72ky5reu5he4es\", \"offeree_nft\": \"optional_ID_of_new_token2\", \"offeree_code_hash\": \"6208b13151f8fba7a474c1b7dfced661a8aa2fb4769049fed8442e4cd1d7f1df\", \"offeror_hands\": [1, 2, 3], \"offeror_draw_point\": 2}}"
+export MAKEOFFER="{\"make_offer\":{\"id\": 1, \"offeree\": \"$(secretcli keys show bob -a)\", \"offeror_nft_contract\": \"secret1dqrzwx9trx3uhx5k6cm7dxm3dfgmsy58aq78qy\", \"offeror_nft\": \"ID_of_token\", \"offeror_code_hash\": \"6208b13151f8fba7a474c1b7dfced661a8aa2fb4769049fed8442e4cd1d7f1df\", \"offeree_nft_contract\": \"secret1dqrzwx9trx3uhx5k6cm7dxm3dfgmsy58aq78qy\", \"offeree_nft\": \"ID_of_token2\", \"offeree_code_hash\": \"6208b13151f8fba7a474c1b7dfced661a8aa2fb4769049fed8442e4cd1d7f1df\", \"offeror_hands\": [1, 2, 3], \"offeror_draw_point\": -1}}"
 export RES=$(secretcli tx compute execute $CONTRACT "$MAKEOFFER" --from alice -y)
 export TX=$(echo $RES | jq -r '.txhash')
 secretcli q tx $TX
@@ -86,9 +86,22 @@ export RES=$(secretcli tx compute execute $CONTRACT "$ACCEPT" --from bob -y)
 export TX=$(echo $RES | jq -r '.txhash')
 secretcli q tx $TX
 
+# gen view_key
+export GENVIEWKEY="{\"generate_viewing_key\":{\"entropy\":  \"entropy_source\"}}"
+export RES=$(secretcli tx compute execute $CONTRACT "$GENVIEWKEY" --from alice -y)
+export TX=$(echo $RES | jq -r '.txhash')
+export VIEWKEY=$(secretcli query compute tx $TX | jq -r '.output_data_as_string' | sed 's/\"//g')
+
 # offer
 export OFFER=$(jq -n '{"offer":{"id":1}}')
 secretcli q compute query $CONTRACT "$OFFER"
+
+# offer with view_key
+export OFFER="{\"offer\":{\"id\": 2, \"address\": \"$(secretcli keys show alice -a)\", \"viewing_key\": \"$VIEWKEY\" }}"
+secretcli q compute query $CONTRACT "$OFFER"
+
+# decode
+secretcli query compute tx $TX
 ```
 
 ## Hands

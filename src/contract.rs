@@ -2,7 +2,7 @@ use cosmwasm_std::{
     log, to_binary, Api, Binary, Context, Env, Extern, HandleResponse, HumanAddr, InitResponse,
     Order, Querier, StdResult, Storage, WasmMsg, KV,
 };
-use secret_toolkit::crypto::sha_256;
+// use secret_toolkit::crypto::sha_256;
 // use snip721_reference_impl::msg::HandleMsg as Cw721HandleMsg;
 
 use crate::hand::{Hand, MatchResult};
@@ -12,7 +12,7 @@ use crate::state::{
     config, config_read, offers, offers_read, read_viewing_key, write_viewing_key, Offer,
     OfferStatus, State,
 };
-use crate::utils::to_array;
+use crate::utils::{sha_256, to_array};
 use crate::validation::{validate_nft, validate_offer_id, validate_offeree};
 use crate::viewing_key::ViewingKey;
 
@@ -226,7 +226,7 @@ pub fn query<S: Storage, A: Api, Q: Querier>(
             address,
             viewing_key,
         } => query_offer(&deps, id, address, viewing_key),
-        QueryMsg::Offers {} => query_offers(&deps),
+        // QueryMsg::Offers {} => query_offers(&deps),
     }
 }
 
@@ -257,17 +257,17 @@ fn query_offer<S: Storage, A: Api, Q: Querier>(
     };
 }
 
-fn query_offers<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> StdResult<Binary> {
-    let res_data: StdResult<Vec<KV<Offer>>> = offers_read(&deps.storage)
-        .range(None, None, Order::Ascending)
-        .collect();
-    let data = res_data.unwrap();
-    let ids: Vec<u64> = data
-        .iter()
-        .map(|(k, _)| u64::from_be_bytes(to_array::<u8, 8>(k.to_vec())))
-        .collect();
-    to_binary(&OffersResponse { ids })
-}
+// fn query_offers<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> StdResult<Binary> {
+//     let res_data: StdResult<Vec<KV<Offer>>> = offers_read(&deps.storage)
+//         .range(None, None, Order::Ascending)
+//         .collect();
+//     let data = res_data.unwrap();
+//     let ids: Vec<u64> = data
+//         .iter()
+//         .map(|(k, _)| u64::from_be_bytes(to_array::<u8, 8>(k.to_vec())))
+//         .collect();
+//     to_binary(&OffersResponse { ids })
+// }
 
 #[cfg(test)]
 mod tests {
@@ -462,19 +462,19 @@ mod tests {
         assert_eq!(offeree_expected, offer.offeree_hands);
     }
 
-    #[test]
-    fn query_offers() {
-        let mut deps = initialize();
-        let id_1 = 100;
-        let msg = valid_sample_offer_msg(id_1);
-        handle(&mut deps, mock_env("nft_owner_1", &[]), msg).unwrap();
-        let id_2 = 101;
-        let msg = valid_sample_offer_msg(id_2);
-        handle(&mut deps, mock_env("nft_owner_1", &[]), msg).unwrap();
+    // #[test]
+    // fn query_offers() {
+    //     let mut deps = initialize();
+    //     let id_1 = 100;
+    //     let msg = valid_sample_offer_msg(id_1);
+    //     handle(&mut deps, mock_env("nft_owner_1", &[]), msg).unwrap();
+    //     let id_2 = 101;
+    //     let msg = valid_sample_offer_msg(id_2);
+    //     handle(&mut deps, mock_env("nft_owner_1", &[]), msg).unwrap();
 
-        let msg = QueryMsg::Offers {};
-        let res = query(&deps, msg).unwrap();
-        let offers: OffersResponse = from_binary(&res).unwrap();
-        assert_eq!(vec![id_1, id_2], offers.ids)
-    }
+    //     let msg = QueryMsg::Offers {};
+    //     let res = query(&deps, msg).unwrap();
+    //     let offers: OffersResponse = from_binary(&res).unwrap();
+    //     assert_eq!(vec![id_1, id_2], offers.ids)
+    // }
 }

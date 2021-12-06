@@ -43,7 +43,7 @@ pub enum QueryMsg {
         address: Option<HumanAddr>,
         viewing_key: Option<String>,
     },
-    Offers {},
+    // Offers {},
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]

@@ -70,5 +70,6 @@ clean:
 .PHONY: wasm
 wasm:
 	RUSTFLAGS='-C link-arg=-s' cargo build --release --target wasm32-unknown-unknown
-	wasm-opt -Oz ./target/wasm32-unknown-unknown/release/*.wasm -o ./contract.wasm
-	cat ./contract.wasm | gzip -9 > ./contract.wasm.gz
+	wasm-opt -Oz ./target/wasm32-unknown-unknown/release/*.wasm -o ./wasm/contract.wasm
+# 	cp ./target/wasm32-unknown-unknown/release/*.wasm ./wasm/contract.wasm
+	cat ./wasm/contract.wasm | gzip -9 > ./wasm/contract.wasm.gz
