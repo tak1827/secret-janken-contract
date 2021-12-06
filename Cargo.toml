@@ -35,7 +35,7 @@ backtraces = ["cosmwasm-std/backtraces"]
 [dependencies]
 cosmwasm-schema = { git = "https://github.com/enigmampc/SecretNetwork", tag = "v1.0.0" }
 cosmwasm-std = { git = "https://github.com/enigmampc/SecretNetwork", tag = "v1.0.0" }
-cosmwasm-storage = { git = "https://github.com/enigmampc/SecretNetwork", tag = "v1.0.0" }
+cosmwasm-storage = { git = "https://github.com/enigmampc/SecretNetwork", tag = "v1.0.0", features = ["iterator"] }
 secret-toolkit = { git = "https://github.com/enigmampc/secret-toolkit", branch = "token-permits" }
 snip721-reference-impl = { git = "https://github.com/baedrik/snip721-reference-impl" }
 # secrete-nft = { git = "https://github.com/tak1827/secrete-nft" }

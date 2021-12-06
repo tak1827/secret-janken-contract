@@ -40,7 +40,13 @@ pub enum HandleMsg {
 pub enum QueryMsg {
     Offer {
         id: u64,
-        address: HumanAddr,
-        viewing_key: String,
+        address: Option<HumanAddr>,
+        viewing_key: Option<String>,
     },
+    Offers {},
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct OffersResponse {
+    pub ids: Vec<u64>,
 }

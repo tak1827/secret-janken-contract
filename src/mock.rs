@@ -7,13 +7,12 @@ use snip721_reference_impl::msg::{QueryAnswer, QueryMsg as Cw721QueryMsg};
 use std::collections::HashMap;
 
 pub fn mock_dependencies(
-    canonical_length: usize,
     _contract_balance: &[Coin],
     owners: Option<HashMap<String, HumanAddr>>,
 ) -> Extern<MockStorage, MockApi, MockQuerier> {
     Extern {
         storage: MockStorage::default(),
-        api: MockApi::new(canonical_length),
+        api: MockApi::new(20),
         querier: MockQuerier::new(owners),
     }
 }
