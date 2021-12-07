@@ -16,6 +16,10 @@ pub const PREFIX_VIEWING_KEY: &[u8] = b"viewingkey";
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct State {
     pub prng_seed: Vec<u8>,
+    pub entropy: Vec<u8>,
+    pub banker_wallet: HumanAddr,
+    pub fee_recipient: HumanAddr,
+    pub fee_rate: u64,
 }
 
 pub fn config<S: Storage>(storage: &mut S) -> Singleton<S, State> {

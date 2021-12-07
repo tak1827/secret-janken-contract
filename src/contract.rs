@@ -1,28 +1,33 @@
 use cosmwasm_std::{
-    log, to_binary, Api, Binary, Context, Env, Extern, HandleResponse, HumanAddr, InitResponse,
-    Order, Querier, StdResult, Storage, WasmMsg, KV,
+    coins, log, to_binary, Api, BankMsg, Binary, Context, CosmosMsg, Empty, Env, Extern,
+    HandleResponse, HumanAddr, InitResponse, Querier, StdResult, Storage, WasmMsg,
 };
-// use secret_toolkit::crypto::sha_256;
-// use snip721_reference_impl::msg::HandleMsg as Cw721HandleMsg;
 
-use crate::hand::{Hand, MatchResult};
-use crate::msg::{HandleMsg, InitMsg, OffersResponse, QueryMsg};
+use crate::hand::{rand_hand, Hand, MatchResult};
+use crate::msg::{HandleMsg, InitMsg, QueryMsg};
 use crate::msg_cw721::HandleMsg as Cw721HandleMsg;
 use crate::state::{
     config, config_read, offers, offers_read, read_viewing_key, write_viewing_key, Offer,
     OfferStatus, State,
 };
-use crate::utils::{sha_256, to_array};
-use crate::validation::{validate_nft, validate_offer_id, validate_offeree};
+use crate::utils::{calculate_fee, sha_256, Prng};
+use crate::validation::{validate_balance, validate_nft, validate_offer_id, validate_offeree};
 use crate::viewing_key::ViewingKey;
+
+pub const INVERSE_BASIS_POINT: u64 = 10000;
+pub const DEFAULT_FEE_RATE: u64 = 300;
 
 pub fn init<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
-    _env: Env,
+    env: Env,
     msg: InitMsg,
 ) -> StdResult<InitResponse> {
     let state = State {
-        prng_seed: sha_256(base64::encode(msg.prng_seed).as_bytes()).to_vec(),
+        prng_seed: sha_256(base64::encode(msg.prng_seed.clone()).as_bytes()).to_vec(),
+        entropy: msg.prng_seed.as_bytes().to_vec(),
+        banker_wallet: env.message.sender.clone(),
+        fee_recipient: env.message.sender,
+        fee_rate: DEFAULT_FEE_RATE,
     };
     config(&mut deps.storage).save(&state)?;
 
@@ -62,6 +67,12 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
         ),
         HandleMsg::AcceptOffer { id, offeree_hands } => try_accept(deps, env, id, offeree_hands),
         HandleMsg::DeclineOffer { id } => try_decline(deps, env, id),
+        HandleMsg::BetToken {
+            denom,
+            amount,
+            hand,
+            entropy,
+        } => try_bet_token(deps, env, denom, amount, hand, entropy),
         HandleMsg::GenerateViewingKey { entropy, .. } => {
             try_generate_viewing_key(deps, env, entropy)
         }
@@ -194,6 +205,61 @@ pub fn try_decline<S: Storage, A: Api, Q: Querier>(
     Ok(HandleResponse {
         messages: vec![],
         log: vec![log("action", "declined")],
+        data: None,
+    })
+}
+
+pub fn try_bet_token<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    env: Env,
+    denom: String,
+    amount: u64,
+    hand: u8,
+    entropy: String,
+) -> StdResult<HandleResponse> {
+    // check sender balance
+    validate_balance(deps, &env.message.sender, &denom, amount.into())?;
+    // check banker wallet balance
+    let mut state: State = config_read(&deps.storage).load()?;
+    validate_balance(deps, &state.banker_wallet, &denom, amount.into())?;
+
+    // generate and save new random bytes
+    let rng = Prng::new_rand_bytes(&state.entropy, (&entropy).as_ref());
+    state.entropy = rng.clone();
+    config(&mut deps.storage).save(&state)?;
+
+    // compete
+    let opponent_hand = rand_hand(&rng);
+    let result = Hand::from(&hand).compete(&opponent_hand);
+
+    let fee = calculate_fee(amount, state.fee_rate);
+    let messages: Vec<CosmosMsg<Empty>> = match &result {
+        MatchResult::Lose => {
+            vec![CosmosMsg::Bank(BankMsg::Send {
+                from_address: env.message.sender.clone(),
+                to_address: state.fee_recipient.clone(),
+                amount: coins(amount.into(), &denom),
+            })]
+        }
+        MatchResult::Draw => {
+            vec![CosmosMsg::Bank(BankMsg::Send {
+                from_address: env.message.sender.clone(),
+                to_address: state.fee_recipient.clone(),
+                amount: coins(fee.into(), &denom),
+            })]
+        }
+        MatchResult::Win => {
+            vec![CosmosMsg::Bank(BankMsg::Send {
+                from_address: state.fee_recipient.clone(),
+                to_address: env.message.sender.clone(),
+                amount: coins((amount - fee).into(), &denom),
+            })]
+        }
+    };
+
+    Ok(HandleResponse {
+        messages,
+        log: vec![log("action", "bet"), log("result", result.to_str())],
         data: None,
     })
 }

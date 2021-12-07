@@ -13,7 +13,7 @@ impl Hand {
         *self as u8
     }
 
-    fn compete(&self, opponent: &Hand) -> MatchResult {
+    pub fn compete(&self, opponent: &Hand) -> MatchResult {
         if self.u8() == opponent.u8() {
             MatchResult::Draw
         } else if (self.eq(&Hand::Rock) && opponent.eq(&Hand::Scissors))
@@ -102,6 +102,18 @@ impl MatchResult {
     fn to_point(&self) -> i8 {
         (*self as i8) - 1
     }
+    pub fn to_str(&self) -> &str {
+        match self {
+            MatchResult::Lose => "lose",
+            MatchResult::Draw => "draw",
+            MatchResult::Win => "win",
+        }
+    }
+}
+
+pub fn rand_hand(rng: &[u8]) -> Hand {
+    let num: u8 = rng[0] % 3 + 1;
+    Hand::from(&num)
 }
 
 #[cfg(test)]
@@ -139,5 +151,12 @@ mod tests {
         assert_eq!(MatchResult::Draw, player2.compete(&player1, -1));
         assert_eq!(MatchResult::Win, player2.compete(&player1, -2));
         assert_eq!(MatchResult::Lose, player2.compete(&player1, 0));
+    }
+
+    #[test]
+    fn rand() {
+        rand_hand("1".as_ref());
+        rand_hand("2".as_ref());
+        rand_hand("3".as_ref());
     }
 }

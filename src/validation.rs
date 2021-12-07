@@ -1,7 +1,6 @@
 use cosmwasm_std::{
     to_binary, Api, Extern, HumanAddr, Querier, QueryRequest, StdError, Storage, WasmQuery,
 };
-// use snip721_reference_impl::msg::{QueryAnswer, QueryMsg as Cw721QueryMsg};
 
 use crate::msg_cw721::{QueryAnswer, QueryMsg as Cw721QueryMsg};
 use crate::state::{offers, offers_read, Offer};
@@ -38,12 +37,6 @@ pub fn validate_nft<S: Storage, A: Api, Q: Querier>(
     let res = deps.querier.query::<QueryAnswer>(&query)?;
     let owner = match res {
         QueryAnswer::OwnerOf { owner, .. } => owner,
-        _ => {
-            return Err(StdError::generic_err(format!(
-                "unexpected response type, res: {:?}",
-                res
-            )))
-        }
     };
 
     if owner != expected_owner {
@@ -73,4 +66,20 @@ pub fn validate_offeree<S: Storage, A: Api, Q: Querier>(
         )));
     }
     Ok(offer)
+}
+
+pub fn validate_balance<S: Storage, A: Api, Q: Querier>(
+    deps: &mut Extern<S, A, Q>,
+    address: &HumanAddr,
+    denom: &str,
+    amount: u128,
+) -> Result<bool, StdError> {
+    let balance = deps.querier.query_balance(address, denom)?;
+    if balance.amount.u128() < amount as u128 {
+        return Err(StdError::generic_err(format!(
+            "insufficient balance in address({})",
+            address
+        )));
+    }
+    Ok(true)
 }

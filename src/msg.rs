@@ -29,6 +29,12 @@ pub enum HandleMsg {
     DeclineOffer {
         id: u64,
     },
+    BetToken {
+        denom: String,
+        amount: u64,
+        hand: u8,
+        entropy: String,
+    },
     GenerateViewingKey {
         entropy: String,
         padding: Option<String>,

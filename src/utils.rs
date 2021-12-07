@@ -4,6 +4,7 @@ use sha2::{Digest, Sha256};
 use std::convert::TryInto;
 use subtle::ConstantTimeEq;
 
+use crate::contract::INVERSE_BASIS_POINT;
 use crate::viewing_key::VIEWING_KEY_SIZE;
 
 pub const SHA256_HASH_SIZE: usize = 32;
@@ -19,10 +20,10 @@ pub fn create_hashed_password(s1: &str) -> [u8; VIEWING_KEY_SIZE] {
         .expect("Wrong password length")
 }
 
-pub fn to_array<T, const N: usize>(v: Vec<T>) -> [T; N] {
-    v.try_into()
-        .unwrap_or_else(|v: Vec<T>| panic!("Expected a Vec of length {} but it was {}", N, v.len()))
-}
+// pub fn to_array<T, const N: usize>(v: Vec<T>) -> [T; N] {
+//     v.try_into()
+//         .unwrap_or_else(|v: Vec<T>| panic!("Expected a Vec of length {} but it was {}", N, v.len()))
+// }
 
 pub fn sha_256(data: &[u8]) -> [u8; SHA256_HASH_SIZE] {
     let mut hasher = Sha256::new();
@@ -32,6 +33,10 @@ pub fn sha_256(data: &[u8]) -> [u8; SHA256_HASH_SIZE] {
     let mut result = [0u8; 32];
     result.copy_from_slice(hash.as_slice());
     result
+}
+
+pub fn calculate_fee(amount: u64, fee_rate: u64) -> u64 {
+    amount * INVERSE_BASIS_POINT * fee_rate
 }
 
 pub struct Prng {
@@ -60,5 +65,10 @@ impl Prng {
         self.rng.fill_bytes(&mut bytes);
 
         bytes
+    }
+
+    pub fn new_rand_bytes(seed: &[u8], entropy: &[u8]) -> Vec<u8> {
+        let mut rng = Self::new(seed, (entropy).as_ref());
+        rng.rand_bytes().to_vec()
     }
 }

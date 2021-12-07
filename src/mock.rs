@@ -1,4 +1,4 @@
-use cosmwasm_std::testing::{MockApi, MockStorage};
+use cosmwasm_std::testing::{BankQuerier, MockApi, MockStorage, MOCK_CONTRACT_ADDR};
 use cosmwasm_std::{
     from_binary, from_slice, to_binary, Coin, Empty, Extern, HumanAddr, Querier, QuerierResult,
     QueryRequest, SystemError, WasmQuery,
@@ -9,27 +9,33 @@ use std::collections::HashMap;
 use crate::msg_cw721::{QueryAnswer, QueryMsg as Cw721QueryMsg};
 
 pub fn mock_dependencies(
-    _contract_balance: &[Coin],
+    contract_balance: &[Coin],
     owners: Option<HashMap<String, HumanAddr>>,
 ) -> Extern<MockStorage, MockApi, MockQuerier> {
+    let contract_addr = HumanAddr::from(MOCK_CONTRACT_ADDR);
     Extern {
         storage: MockStorage::default(),
         api: MockApi::new(20),
-        querier: MockQuerier::new(owners),
+        querier: MockQuerier::new(&[(&contract_addr, contract_balance)], owners),
     }
 }
 
 pub struct MockQuerier {
+    bank: BankQuerier,
     wasm: WasmQuerier,
 }
 
 impl MockQuerier {
-    pub fn new(_owners: Option<HashMap<String, HumanAddr>>) -> Self {
+    pub fn new(
+        balances: &[(&HumanAddr, &[Coin])],
+        _owners: Option<HashMap<String, HumanAddr>>,
+    ) -> Self {
         let owners = match _owners {
             Some(owners) => owners,
             None => HashMap::new(),
         };
         MockQuerier {
+            bank: BankQuerier::new(balances),
             wasm: WasmQuerier { owners },
         }
     }
@@ -53,6 +59,7 @@ impl Querier for MockQuerier {
 impl MockQuerier {
     pub fn handle_query(&self, request: &QueryRequest<Empty>) -> QuerierResult {
         match &request {
+            QueryRequest::Bank(bank_query) => self.bank.query(bank_query),
             QueryRequest::Wasm(msg) => self.wasm.query(msg),
             _ => Err(SystemError::UnsupportedRequest {
                 kind: format!("only wasm supporting, request: {:?}", request),
@@ -80,11 +87,6 @@ impl WasmQuerier {
         let query: Cw721QueryMsg = from_binary(&msg).unwrap();
         let token_id = match query {
             Cw721QueryMsg::OwnerOf { token_id, .. } => token_id,
-            _ => {
-                return Err(SystemError::UnsupportedRequest {
-                    kind: format!("only ownerof supporting, request: {:?}", query),
-                })
-            }
         };
 
         let owner = match self.owners.get(&token_id) {
