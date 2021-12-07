@@ -36,7 +36,7 @@ pub fn sha_256(data: &[u8]) -> [u8; SHA256_HASH_SIZE] {
 }
 
 pub fn calculate_fee(amount: u64, fee_rate: u64) -> u64 {
-    amount * INVERSE_BASIS_POINT * fee_rate
+    amount * fee_rate / INVERSE_BASIS_POINT
 }
 
 pub struct Prng {
@@ -69,6 +69,7 @@ impl Prng {
 
     pub fn new_rand_bytes(seed: &[u8], entropy: &[u8]) -> Vec<u8> {
         let mut rng = Self::new(seed, (entropy).as_ref());
-        rng.rand_bytes().to_vec()
+        let rand_slice = rng.rand_bytes();
+        sha_256(&rand_slice).to_vec()
     }
 }

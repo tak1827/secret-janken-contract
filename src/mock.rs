@@ -1,22 +1,20 @@
-use cosmwasm_std::testing::{BankQuerier, MockApi, MockStorage, MOCK_CONTRACT_ADDR};
+use cosmwasm_std::testing::{BankQuerier, MockApi, MockStorage};
 use cosmwasm_std::{
     from_binary, from_slice, to_binary, Coin, Empty, Extern, HumanAddr, Querier, QuerierResult,
     QueryRequest, SystemError, WasmQuery,
 };
-// use snip721_reference_impl::msg::{QueryAnswer, QueryMsg as Cw721QueryMsg};
 use std::collections::HashMap;
 
 use crate::msg_cw721::{QueryAnswer, QueryMsg as Cw721QueryMsg};
 
 pub fn mock_dependencies(
-    contract_balance: &[Coin],
+    balances: &[(&HumanAddr, &[Coin])],
     owners: Option<HashMap<String, HumanAddr>>,
 ) -> Extern<MockStorage, MockApi, MockQuerier> {
-    let contract_addr = HumanAddr::from(MOCK_CONTRACT_ADDR);
     Extern {
         storage: MockStorage::default(),
         api: MockApi::new(20),
-        querier: MockQuerier::new(&[(&contract_addr, contract_balance)], owners),
+        querier: MockQuerier::new(balances, owners),
     }
 }
 

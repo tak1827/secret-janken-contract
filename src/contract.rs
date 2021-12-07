@@ -234,11 +234,11 @@ pub fn try_bet_token<S: Storage, A: Api, Q: Querier>(
 
     let fee = calculate_fee(amount, state.fee_rate);
     let messages: Vec<CosmosMsg<Empty>> = match &result {
-        MatchResult::Lose => {
+        MatchResult::Win => {
             vec![CosmosMsg::Bank(BankMsg::Send {
-                from_address: env.message.sender.clone(),
-                to_address: state.fee_recipient.clone(),
-                amount: coins(amount.into(), &denom),
+                from_address: state.fee_recipient.clone(),
+                to_address: env.message.sender.clone(),
+                amount: coins((amount - fee).into(), &denom),
             })]
         }
         MatchResult::Draw => {
@@ -248,11 +248,11 @@ pub fn try_bet_token<S: Storage, A: Api, Q: Querier>(
                 amount: coins(fee.into(), &denom),
             })]
         }
-        MatchResult::Win => {
+        MatchResult::Lose => {
             vec![CosmosMsg::Bank(BankMsg::Send {
-                from_address: state.fee_recipient.clone(),
-                to_address: env.message.sender.clone(),
-                amount: coins((amount - fee).into(), &denom),
+                from_address: env.message.sender.clone(),
+                to_address: state.fee_recipient.clone(),
+                amount: coins(amount.into(), &denom),
             })]
         }
     };
@@ -340,8 +340,9 @@ mod tests {
     use super::*;
     use crate::hand::{Hand, Hands};
     use crate::mock::{mock_dependencies, MockQuerier};
+    use crate::utils::calculate_fee;
     use cosmwasm_std::testing::{mock_env, MockApi, MockStorage};
-    use cosmwasm_std::{from_binary, CosmosMsg, Extern, StdError};
+    use cosmwasm_std::{from_binary, Coin, StdError};
     use std::collections::HashMap;
 
     fn initialize() -> Extern<MockStorage, MockApi, MockQuerier> {
@@ -350,12 +351,16 @@ mod tests {
             ("nft_id_2".to_string(), HumanAddr("nft_owner_2".to_string())),
             ("nft_id_3".to_string(), HumanAddr("nft_owner_3".to_string())),
         ]);
-
-        let mut deps = mock_dependencies(&[], Some(owners));
+        let balance: &[(&HumanAddr, &[Coin])] = &[
+            (&HumanAddr::from("bank_wallet"), &coins(10000, "uscrt")),
+            (&HumanAddr::from("bettor_1"), &coins(10000, "uscrt")),
+            (&HumanAddr::from("bettor_2"), &coins(10000, "uscrt")),
+        ];
+        let mut deps = mock_dependencies(balance, Some(owners));
         let msg = InitMsg {
             prng_seed: "prng_seed".to_string(),
         };
-        init(&mut deps, mock_env("creator", &[]), msg).unwrap();
+        init(&mut deps, mock_env("bank_wallet", &[]), msg).unwrap();
         deps
     }
 
@@ -376,7 +381,7 @@ mod tests {
 
     #[test]
     fn proper_initialization() {
-        let mut deps = mock_dependencies(&[], None);
+        let mut deps = mock_dependencies(&[(&HumanAddr::from(""), &[])], None);
         let msg = InitMsg {
             prng_seed: "prng_seed".to_string(),
         };
@@ -526,6 +531,49 @@ mod tests {
         assert_eq!(offeror_expected, offer.offeror_hands);
         let offeree_expected: Hands = vec![Hand::Paper, Hand::Scissors, Hand::Scissors].into();
         assert_eq!(offeree_expected, offer.offeree_hands);
+    }
+
+    #[test]
+    fn bet_token() {
+        let mut deps = initialize();
+        let denom = "uscrt".to_string();
+
+        let mut pass_win = false;
+        let mut pass_draw = false;
+        let mut pass_lose = false;
+        while !pass_win || !pass_draw || !pass_lose {
+            let env = mock_env("bettor_1", &[]);
+            let amount = 100;
+            let fee = calculate_fee(amount, DEFAULT_FEE_RATE);
+
+            let msg = HandleMsg::BetToken {
+                denom: denom.clone(),
+                amount,
+                hand: 1,
+                entropy: "entropy".to_string(),
+            };
+            let res = handle(&mut deps, env, msg).unwrap();
+
+            assert_eq!(2, res.log.len());
+            assert_eq!(1, res.messages.len());
+
+            let result = &res.log[1].value;
+            let msg_amount = match &res.messages[0] {
+                CosmosMsg::Bank(BankMsg::Send { amount, .. }) => amount[0].amount.u128() as u64,
+                _ => panic!("unexpected"),
+            };
+
+            if result == "win" {
+                pass_win = true;
+                assert_eq!(msg_amount, amount - fee);
+            } else if result == "draw" {
+                pass_draw = true;
+                assert_eq!(msg_amount, fee);
+            } else if result == "lose" {
+                pass_lose = true;
+                assert_eq!(msg_amount, amount);
+            }
+        }
     }
 
     // #[test]
