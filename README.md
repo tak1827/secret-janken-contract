@@ -1,14 +1,13 @@
-# cosmwasm-gambling
-CosmWasm contract of gambling mini game (rock-paper-scissors)
+# Janken Contract
+CosmWasm Janken contract for Secrete Netork. Janken is the "Rock-Paper-Scissors" in Japanese. The user can bet NFT or Token.
 
-# How to play
-Walking through Janken contract. Taking 2 steps to play with.
-Before play, please take care that the biting nft have already approve Janken contract address
+# How to play NFT betting
+Taking 2 steps to play with.
 
 ### 1st, Making offer
-a player offer a match to the opponent
-the player specify variables
+At first, a player “make offer” to the player who owns the NFT the player wants. NFT rarity is different from each NFTs. So to guaranty fairness, object the required win times in total matches. For example, the high rarity nft owner just need to win once in 3 times match.
 
+At the making offer time, a player choose his hands. The hands are hidden against the opponent. Only the `view_key` holder can see it.
 ```javascript
 {
 	make_offer: {
@@ -34,9 +33,8 @@ secretcli q compute contract-hash $CONTRACT_ADDRESS
 As example, the snip721 contract code hash in `wasm/snip721.wasm.gz` is `6208b13151f8fba7a474c1b7dfced661a8aa2fb4769049fed8442e4cd1d7f1df`
 
 ### 2nd, Accept or Decline offer
-the opponent can accept or decline offer.
-
-In the case of accept, the opponent send his own hands
+The opponent can take 2 actions, a one is “accept”. The other is “decline”. When the opponent accept the offer, the opponent submit his hands. Then, the match is processed in contract.
+The winner obtain the looser’s NFT. The NFT transfering is executed in contract, so that both player need to approve Janken contract before match.
 ```javascript
 {
 	accept_offer: {
@@ -55,63 +53,42 @@ In the case of decline, just return the id
 }
 ```
 
+# How to play Token betting
+Taking just 1 steps to play with.
 
-# Note
-```sh
-scp -P 22 -i ~/.ssh/janken_key.pem -r azureuser@20.102.100.176:/home/azureuser/tak/cosmwasm-gambling/contract.wasm.gz ./
-scp -P 22 -i ~/.ssh/janken_key.pem -r ./contract.wasm.gz azureuser@20.121.139.233:/home/azureuser/lab/cosmwasm-gambling/
-
-# deploy
-secretcli tx compute store ./contract.wasm.gz --from alice --gas 10000000 -y
-secretcli query compute list-code
-
-# init
-export INIT=$(jq -n '{"prng_seed": "rng_source"}')
-export RES=$(secretcli tx compute instantiate 1 "$INIT" --from alice --label janken1 -y --gas 1000000)
-export TX=$(echo $RES | jq -r '.txhash')
-export RES=$(secretcli q tx $TX)
-export CONTRACT=$(echo $RES | jq -r '.logs[0].events[1].attributes[0].value')
-# secret1uul3yzm2lgskp3dxpj0zg558hppxk6ptyljer5
-
-# make offer
-secretcli q compute contract-hash $CONTRACT
-export MAKEOFFER="{\"make_offer\":{\"id\": 1, \"offeree\": \"$(secretcli keys show bob -a)\", \"offeror_nft_contract\": \"secret1dqrzwx9trx3uhx5k6cm7dxm3dfgmsy58aq78qy\", \"offeror_nft\": \"ID_of_token\", \"offeror_code_hash\": \"6208b13151f8fba7a474c1b7dfced661a8aa2fb4769049fed8442e4cd1d7f1df\", \"offeree_nft_contract\": \"secret1dqrzwx9trx3uhx5k6cm7dxm3dfgmsy58aq78qy\", \"offeree_nft\": \"ID_of_token2\", \"offeree_code_hash\": \"6208b13151f8fba7a474c1b7dfced661a8aa2fb4769049fed8442e4cd1d7f1df\", \"offeror_hands\": [1, 2, 3], \"offeror_draw_point\": -1}}"
-export RES=$(secretcli tx compute execute $CONTRACT "$MAKEOFFER" --from alice -y)
-export TX=$(echo $RES | jq -r '.txhash')
-secretcli q tx $TX
-
-# accept
-export ACCEPT="{\"accept_offer\":{\"id\": 1, \"offeree_hands\": [3, 2, 1]}}"
-export RES=$(secretcli tx compute execute $CONTRACT "$ACCEPT" --from bob -y)
-export TX=$(echo $RES | jq -r '.txhash')
-secretcli q tx $TX
-
-# gen view_key
-export GENVIEWKEY="{\"generate_viewing_key\":{\"entropy\":  \"entropy_source\"}}"
-export RES=$(secretcli tx compute execute $CONTRACT "$GENVIEWKEY" --from alice -y)
-export TX=$(echo $RES | jq -r '.txhash')
-export VIEWKEY=$(secretcli query compute tx $TX | jq -r '.output_data_as_string' | sed 's/\"//g')
-
-# offer
-export OFFER=$(jq -n '{"offer":{"id":1}}')
-secretcli q compute query $CONTRACT "$OFFER"
-
-# offer with view_key
-export OFFER="{\"offer\":{\"id\": 2, \"address\": \"$(secretcli keys show alice -a)\", \"viewing_key\": \"$VIEWKEY\" }}"
-secretcli q compute query $CONTRACT "$OFFER"
-
-# decode
-secretcli query compute tx $TX
+A player submit a hand, an amount of betting and a entropy. The entropy is used for random number generation source. To prevent darty play, this random number generation source is accumulated every time on play and never be seen from anyone.
+```javascript
+{
+	bet_token: {
+		denom:  // the betting token denom
+		amount: // the betting token amount
+		hand:   // the player hand
+		entropy // the random number generation source
+	}
+}
 ```
 
-## Hands
+The matches is processed automatically in the contract. If a player win, a player get “the betting amount - fee” equivalent amount of token. If a player lose, a player lost “the betting amount ” equivalent amount of token. If the match result is draw, a player just pay fee.
+
+# How to generate View Key 
+`view_key` is used for seeing own hands in maked offer.
+```javascript
+{
+	generate_viewing_key: {
+		entropy: // the random number generation source
+		padding: // the optional padding
+	}
+}
+```
+
+# Hands
 ```
 Rock     = 1
 Paper    = 2
 Scissors = 3
 ```
 
-## The One Match Point
+# The One Match Point
 ```
 Win  = 1
 Draw = 2
