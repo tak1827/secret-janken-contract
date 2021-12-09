@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 pub struct InitMsg {
     pub prng_seed: String,
-    pub banker_wallet: Option<HumanAddr>,
     pub fee_recipient: Option<HumanAddr>,
     pub fee_rate: Option<u64>,
 }
@@ -34,10 +33,12 @@ pub enum HandleMsg {
     },
     BetToken {
         id: u64,
-        denom: String,
-        amount: u64,
         hand: u8,
         entropy: String,
+    },
+    WithdrawFee {
+        denom: String,
+        amount: u64,
     },
     GenerateViewingKey {
         entropy: String,

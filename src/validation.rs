@@ -1,8 +1,9 @@
 use cosmwasm_std::{
-    to_binary, Api, Extern, HumanAddr, Querier, QueryRequest, StdError, Storage, WasmQuery,
+    to_binary, Api, Coin, Extern, HumanAddr, Querier, QueryRequest, StdError, Storage, WasmQuery,
 };
 
 use crate::msg_cw721::{QueryAnswer, QueryMsg as Cw721QueryMsg};
+use crate::state::{config_read, State};
 use crate::state::{offers, offers_read, token_bets_read, Offer};
 
 pub fn validate_offer_id<S: Storage, A: Api, Q: Querier>(
@@ -78,8 +79,26 @@ pub fn validate_token_bet_id<S: Storage, A: Api, Q: Querier>(
     }
 }
 
+pub fn validate_sent_funds(funds: Vec<Coin>) -> Result<Coin, StdError> {
+    if funds.len() != 1 {
+        return Err(StdError::generic_err(format!(
+            "multiple coin sent({:?})",
+            funds
+        )));
+    }
+
+    let fund = &funds[0];
+    if fund.amount.is_zero() {
+        return Err(StdError::generic_err(format!(
+            "sent fund is zero amount({:?})",
+            fund
+        )));
+    }
+    Ok(fund.clone())
+}
+
 pub fn validate_balance<S: Storage, A: Api, Q: Querier>(
-    deps: &mut Extern<S, A, Q>,
+    deps: &Extern<S, A, Q>,
     address: &HumanAddr,
     denom: &str,
     amount: u128,
@@ -92,4 +111,17 @@ pub fn validate_balance<S: Storage, A: Api, Q: Querier>(
         )));
     }
     Ok(true)
+}
+
+pub fn validate_withdrawer<S: Storage, A: Api, Q: Querier>(
+    deps: &Extern<S, A, Q>,
+    address: &HumanAddr,
+    denom: &str,
+    amount: u64,
+) -> Result<bool, StdError> {
+    let state: State = config_read(&deps.storage).load()?;
+    if address != &state.fee_recipient {
+        return Err(StdError::unauthorized());
+    }
+    validate_balance(deps, address, denom, amount.into())
 }
