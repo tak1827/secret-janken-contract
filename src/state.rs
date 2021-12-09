@@ -11,6 +11,7 @@ use crate::viewing_key::ViewingKey;
 
 pub const CONFIG_KEY: &[u8] = b"config";
 pub const PREFIX_OFFERS: &[u8] = b"offers";
+pub const PREFIX_TOKEN_BETS: &[u8] = b"tokenbets";
 pub const PREFIX_VIEWING_KEY: &[u8] = b"viewingkey";
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -105,6 +106,23 @@ pub fn offers<S: Storage>(storage: &mut S) -> Bucket<S, Offer> {
 
 pub fn offers_read<S: ReadonlyStorage>(storage: &S) -> ReadonlyBucket<S, Offer> {
     bucket_read(PREFIX_OFFERS, storage)
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+pub struct TokenBet {
+    pub id: u64,
+    pub denom: String,
+    pub amount: u64,
+    pub hand: Hand,
+    pub result: String,
+}
+
+pub fn token_bets<S: Storage>(storage: &mut S) -> Bucket<S, TokenBet> {
+    bucket(PREFIX_TOKEN_BETS, storage)
+}
+
+pub fn token_bets_read<S: ReadonlyStorage>(storage: &S) -> ReadonlyBucket<S, TokenBet> {
+    bucket_read(PREFIX_TOKEN_BETS, storage)
 }
 
 pub fn write_viewing_key<S: Storage>(store: &mut S, owner: &CanonicalAddr, key: &ViewingKey) {

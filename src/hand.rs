@@ -109,6 +109,10 @@ impl MatchResult {
             MatchResult::Win => "win",
         }
     }
+
+    pub fn to_string(&self) -> String {
+        self.to_str().to_string()
+    }
 }
 
 pub fn rand_hand(rng: &[u8]) -> Hand {

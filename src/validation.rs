@@ -3,7 +3,7 @@ use cosmwasm_std::{
 };
 
 use crate::msg_cw721::{QueryAnswer, QueryMsg as Cw721QueryMsg};
-use crate::state::{offers, offers_read, Offer};
+use crate::state::{offers, offers_read, token_bets_read, Offer};
 
 pub fn validate_offer_id<S: Storage, A: Api, Q: Querier>(
     deps: &Extern<S, A, Q>,
@@ -66,6 +66,16 @@ pub fn validate_offeree<S: Storage, A: Api, Q: Querier>(
         )));
     }
     Ok(offer)
+}
+
+pub fn validate_token_bet_id<S: Storage, A: Api, Q: Querier>(
+    deps: &Extern<S, A, Q>,
+    id: u64,
+) -> Result<bool, StdError> {
+    match token_bets_read(&deps.storage).may_load(&id.to_be_bytes()) {
+        Ok(None) => return Ok(true),
+        _ => return Err(StdError::generic_err(format!("duplicated id({})", id))),
+    }
 }
 
 pub fn validate_balance<S: Storage, A: Api, Q: Querier>(

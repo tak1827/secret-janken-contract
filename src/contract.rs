@@ -7,11 +7,13 @@ use crate::hand::{rand_hand, Hand, MatchResult};
 use crate::msg::{HandleMsg, InitMsg, QueryMsg};
 use crate::msg_cw721::HandleMsg as Cw721HandleMsg;
 use crate::state::{
-    config, config_read, offers, offers_read, read_viewing_key, write_viewing_key, Offer,
-    OfferStatus, State,
+    config, config_read, offers, offers_read, read_viewing_key, token_bets, token_bets_read,
+    write_viewing_key, Offer, OfferStatus, State, TokenBet,
 };
 use crate::utils::{calculate_fee, sha_256, Prng};
-use crate::validation::{validate_balance, validate_nft, validate_offer_id, validate_offeree};
+use crate::validation::{
+    validate_balance, validate_nft, validate_offer_id, validate_offeree, validate_token_bet_id,
+};
 use crate::viewing_key::ViewingKey;
 
 pub const INVERSE_BASIS_POINT: u64 = 10000;
@@ -77,11 +79,12 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
         HandleMsg::AcceptOffer { id, offeree_hands } => try_accept(deps, env, id, offeree_hands),
         HandleMsg::DeclineOffer { id } => try_decline(deps, env, id),
         HandleMsg::BetToken {
+            id,
             denom,
             amount,
             hand,
             entropy,
-        } => try_bet_token(deps, env, denom, amount, hand, entropy),
+        } => try_bet_token(deps, env, id, denom, amount, hand, entropy),
         HandleMsg::GenerateViewingKey { entropy, .. } => {
             try_generate_viewing_key(deps, env, entropy)
         }
@@ -221,11 +224,13 @@ pub fn try_decline<S: Storage, A: Api, Q: Querier>(
 pub fn try_bet_token<S: Storage, A: Api, Q: Querier>(
     deps: &mut Extern<S, A, Q>,
     env: Env,
+    id: u64,
     denom: String,
     amount: u64,
     hand: u8,
     entropy: String,
 ) -> StdResult<HandleResponse> {
+    validate_token_bet_id(&deps, id)?;
     // check sender balance
     validate_balance(deps, &env.message.sender, &denom, amount.into())?;
     // check banker wallet balance
@@ -266,6 +271,16 @@ pub fn try_bet_token<S: Storage, A: Api, Q: Querier>(
         }
     };
 
+    let token_bet = TokenBet {
+        id,
+        denom,
+        amount,
+        hand: Hand::from(&hand),
+        result: result.to_string(),
+    };
+
+    token_bets(&mut deps.storage).save(&id.to_be_bytes(), &token_bet)?;
+
     Ok(HandleResponse {
         messages,
         log: vec![log("action", "bet"), log("result", result.to_str())],
@@ -302,6 +317,7 @@ pub fn query<S: Storage, A: Api, Q: Querier>(
             viewing_key,
         } => query_offer(&deps, id, address, viewing_key),
         // QueryMsg::Offers {} => query_offers(&deps),
+        QueryMsg::TokenBet { id } => query_token_bets(&deps, id),
     }
 }
 
@@ -343,6 +359,16 @@ fn query_offer<S: Storage, A: Api, Q: Querier>(
 //         .collect();
 //     to_binary(&OffersResponse { ids })
 // }
+
+fn query_token_bets<S: Storage, A: Api, Q: Querier>(
+    deps: &Extern<S, A, Q>,
+    id: u64,
+) -> StdResult<Binary> {
+    match token_bets_read(&deps.storage).may_load(&id.to_be_bytes()) {
+        Ok(Some(bet)) => to_binary(&bet),
+        _ => return to_binary(""),
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -548,6 +574,22 @@ mod tests {
         assert_eq!(offeree_expected, offer.offeree_hands);
     }
 
+    // #[test]
+    // fn query_offers() {
+    //     let mut deps = initialize();
+    //     let id_1 = 100;
+    //     let msg = valid_sample_offer_msg(id_1);
+    //     handle(&mut deps, mock_env("nft_owner_1", &[]), msg).unwrap();
+    //     let id_2 = 101;
+    //     let msg = valid_sample_offer_msg(id_2);
+    //     handle(&mut deps, mock_env("nft_owner_1", &[]), msg).unwrap();
+
+    //     let msg = QueryMsg::Offers {};
+    //     let res = query(&deps, msg).unwrap();
+    //     let offers: OffersResponse = from_binary(&res).unwrap();
+    //     assert_eq!(vec![id_1, id_2], offers.ids)
+    // }
+
     #[test]
     fn bet_token() {
         let mut deps = initialize();
@@ -556,12 +598,14 @@ mod tests {
         let mut pass_win = false;
         let mut pass_draw = false;
         let mut pass_lose = false;
+        let mut id: u64 = 0;
         while !pass_win || !pass_draw || !pass_lose {
             let env = mock_env("bettor_1", &[]);
             let amount = 100;
             let fee = calculate_fee(amount, DEFAULT_FEE_RATE);
 
             let msg = HandleMsg::BetToken {
+                id,
                 denom: denom.clone(),
                 amount,
                 hand: 1,
@@ -588,22 +632,35 @@ mod tests {
                 pass_lose = true;
                 assert_eq!(msg_amount, amount);
             }
+
+            id += 1;
         }
     }
 
-    // #[test]
-    // fn query_offers() {
-    //     let mut deps = initialize();
-    //     let id_1 = 100;
-    //     let msg = valid_sample_offer_msg(id_1);
-    //     handle(&mut deps, mock_env("nft_owner_1", &[]), msg).unwrap();
-    //     let id_2 = 101;
-    //     let msg = valid_sample_offer_msg(id_2);
-    //     handle(&mut deps, mock_env("nft_owner_1", &[]), msg).unwrap();
+    #[test]
+    fn query_token_bet() {
+        let mut deps = initialize();
 
-    //     let msg = QueryMsg::Offers {};
-    //     let res = query(&deps, msg).unwrap();
-    //     let offers: OffersResponse = from_binary(&res).unwrap();
-    //     assert_eq!(vec![id_1, id_2], offers.ids)
-    // }
+        let env = mock_env("bettor_1", &[]);
+        let id = 123;
+        let denom = "uscrt".to_string();
+        let amount = 100;
+        let hand = 1;
+
+        let msg = HandleMsg::BetToken {
+            id,
+            denom: denom.clone(),
+            amount,
+            hand,
+            entropy: "entropy".to_string(),
+        };
+        handle(&mut deps, env, msg).unwrap();
+
+        let msg = QueryMsg::TokenBet { id };
+        let res = query(&deps, msg).unwrap();
+        let bet: TokenBet = from_binary(&res).unwrap();
+        assert_eq!(denom, bet.denom);
+        assert_eq!(amount, bet.amount);
+        assert_eq!(Hand::from(&hand), bet.hand);
+    }
 }

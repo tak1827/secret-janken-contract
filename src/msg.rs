@@ -33,6 +33,7 @@ pub enum HandleMsg {
         id: u64,
     },
     BetToken {
+        id: u64,
         denom: String,
         amount: u64,
         hand: u8,
@@ -53,6 +54,9 @@ pub enum QueryMsg {
         viewing_key: Option<String>,
     },
     // Offers {},
+    TokenBet {
+        id: u64,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
