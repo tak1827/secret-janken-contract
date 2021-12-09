@@ -25,9 +25,18 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
     let state = State {
         prng_seed: sha_256(base64::encode(msg.prng_seed.clone()).as_bytes()).to_vec(),
         entropy: msg.prng_seed.as_bytes().to_vec(),
-        banker_wallet: env.message.sender.clone(),
-        fee_recipient: env.message.sender,
-        fee_rate: DEFAULT_FEE_RATE,
+        banker_wallet: match msg.banker_wallet {
+            Some(wallet) => wallet,
+            None => env.message.sender.clone(),
+        },
+        fee_recipient: match msg.fee_recipient {
+            Some(recipient) => recipient,
+            None => env.message.sender,
+        },
+        fee_rate: match msg.fee_rate {
+            Some(rate) => rate,
+            None => DEFAULT_FEE_RATE,
+        },
     };
     config(&mut deps.storage).save(&state)?;
 
@@ -359,6 +368,9 @@ mod tests {
         let mut deps = mock_dependencies(balance, Some(owners));
         let msg = InitMsg {
             prng_seed: "prng_seed".to_string(),
+            banker_wallet: None,
+            fee_recipient: None,
+            fee_rate: None,
         };
         init(&mut deps, mock_env("bank_wallet", &[]), msg).unwrap();
         deps
@@ -384,6 +396,9 @@ mod tests {
         let mut deps = mock_dependencies(&[(&HumanAddr::from(""), &[])], None);
         let msg = InitMsg {
             prng_seed: "prng_seed".to_string(),
+            banker_wallet: None,
+            fee_recipient: None,
+            fee_rate: None,
         };
         init(&mut deps, mock_env("creator", &[]), msg).unwrap();
     }
