@@ -56,12 +56,11 @@ In the case of decline, just return the id
 # How to play Token betting
 Taking just 1 steps to play with.
 
-A player submit a hand, an amount of betting and a entropy. The entropy is used for random number generation source. To prevent darty play, this random number generation source is accumulated every time on play and never be seen from anyone.
+A player submit a hand and a entropy with betting amount using `--amount` option. The entropy is used for random number generation source. To prevent darty play, this random number generation source is accumulated every time on play and never be seen from anyone.
 ```javascript
 {
 	bet_token: {
-		denom:  // the betting token denom
-		amount: // the betting token amount
+		id:     // the play id
 		hand:   // the player hand
 		entropy // the random number generation source
 	}

@@ -391,15 +391,21 @@ mod tests {
     use std::collections::HashMap;
 
     fn initialize() -> Extern<MockStorage, MockApi, MockQuerier> {
+        let denom = "uscrt".to_string();
+        let init_amount = coins(10000, &denom);
+        let env = mock_env("deployer", &init_amount);
+        let contract_addr = env.contract.address.clone();
+
         let owners = HashMap::from([
             ("nft_id_1".to_string(), HumanAddr("nft_owner_1".to_string())),
             ("nft_id_2".to_string(), HumanAddr("nft_owner_2".to_string())),
             ("nft_id_3".to_string(), HumanAddr("nft_owner_3".to_string())),
         ]);
         let balance: &[(&HumanAddr, &[Coin])] = &[
-            (&HumanAddr::from("bank_wallet"), &coins(10000, "uscrt")),
-            (&HumanAddr::from("bettor_1"), &coins(10000, "uscrt")),
-            (&HumanAddr::from("bettor_2"), &coins(10000, "uscrt")),
+            (&HumanAddr::from("deployer"), &init_amount),
+            (&contract_addr, &init_amount),
+            (&HumanAddr::from("bettor_1"), &init_amount),
+            (&HumanAddr::from("bettor_2"), &init_amount),
         ];
         let mut deps = mock_dependencies(balance, Some(owners));
         let msg = InitMsg {
@@ -407,7 +413,7 @@ mod tests {
             fee_recipient: None,
             fee_rate: None,
         };
-        init(&mut deps, mock_env("bank_wallet", &[]), msg).unwrap();
+        init(&mut deps, env, msg).unwrap();
         deps
     }
 
@@ -598,77 +604,72 @@ mod tests {
     //     assert_eq!(vec![id_1, id_2], offers.ids)
     // }
 
-    // #[test]
-    // fn bet_token() {
-    //     let mut deps = initialize();
-    //     let denom = "uscrt".to_string();
+    #[test]
+    fn bet_token() {
+        let mut deps = initialize();
+        let denom = "uscrt".to_string();
 
-    //     let mut pass_win = false;
-    //     let mut pass_draw = false;
-    //     let mut pass_lose = false;
-    //     let mut id: u64 = 0;
-    //     while !pass_win || !pass_draw || !pass_lose {
-    //         let env = mock_env("bettor_1", &[]);
-    //         let amount = 100;
-    //         let fee = calculate_fee(amount, DEFAULT_FEE_RATE);
+        let mut pass_win = false;
+        let mut pass_draw = false;
+        let mut pass_lose = false;
+        let mut id: u64 = 0;
+        while !pass_win || !pass_draw || !pass_lose {
+            id += 1;
 
-    //         let msg = HandleMsg::BetToken {
-    //             id,
-    //             denom: denom.clone(),
-    //             amount,
-    //             hand: 1,
-    //             entropy: "entropy".to_string(),
-    //         };
-    //         let res = handle(&mut deps, env, msg).unwrap();
+            let amount: u64 = 100;
+            let env = mock_env("bettor_1", &coins(amount.into(), &denom));
+            let fee = calculate_fee(amount, DEFAULT_FEE_RATE);
 
-    //         assert_eq!(2, res.log.len());
-    //         assert_eq!(1, res.messages.len());
+            let msg = HandleMsg::BetToken {
+                id,
+                hand: 1,
+                entropy: "entropy".to_string(),
+            };
+            let res = handle(&mut deps, env, msg).unwrap();
+            assert_eq!(2, res.log.len());
 
-    //         let result = &res.log[1].value;
-    //         let msg_amount = match &res.messages[0] {
-    //             CosmosMsg::Bank(BankMsg::Send { amount, .. }) => amount[0].amount.u128() as u64,
-    //             _ => panic!("unexpected"),
-    //         };
+            let result = &res.log[1].value;
+            if result == "lose" {
+                assert_eq!(0, res.messages.len());
+                pass_lose = true;
+                continue;
+            }
+            let msg_amount = match &res.messages[0] {
+                CosmosMsg::Bank(BankMsg::Send { amount, .. }) => amount[0].amount.u128() as u64,
+                _ => panic!("unexpected"),
+            };
 
-    //         if result == "win" {
-    //             pass_win = true;
-    //             assert_eq!(msg_amount, amount - fee);
-    //         } else if result == "draw" {
-    //             pass_draw = true;
-    //             assert_eq!(msg_amount, fee);
-    //         } else if result == "lose" {
-    //             pass_lose = true;
-    //             assert_eq!(msg_amount, amount);
-    //         }
+            if result == "win" {
+                pass_win = true;
+                assert_eq!(msg_amount, amount * 2 - fee);
+            } else {
+                pass_draw = true;
+                assert_eq!(msg_amount, amount - fee);
+            }
+        }
+    }
 
-    //         id += 1;
-    //     }
-    // }
+    #[test]
+    fn query_token_bet() {
+        let mut deps = initialize();
 
-    // #[test]
-    // fn query_token_bet() {
-    //     let mut deps = initialize();
+        let denom = "uscrt".to_string();
+        let amount = 100;
+        let env = mock_env("bettor_1", &coins(amount.into(), &denom));
+        let id = 123;
+        let hand = 1;
+        let msg = HandleMsg::BetToken {
+            id,
+            hand,
+            entropy: "entropy".to_string(),
+        };
+        handle(&mut deps, env, msg).unwrap();
 
-    //     let env = mock_env("bettor_1", &[]);
-    //     let id = 123;
-    //     let denom = "uscrt".to_string();
-    //     let amount = 100;
-    //     let hand = 1;
-
-    //     let msg = HandleMsg::BetToken {
-    //         id,
-    //         denom: denom.clone(),
-    //         amount,
-    //         hand,
-    //         entropy: "entropy".to_string(),
-    //     };
-    //     handle(&mut deps, env, msg).unwrap();
-
-    //     let msg = QueryMsg::TokenBet { id };
-    //     let res = query(&deps, msg).unwrap();
-    //     let bet: TokenBet = from_binary(&res).unwrap();
-    //     assert_eq!(denom, bet.denom);
-    //     assert_eq!(amount, bet.amount);
-    //     assert_eq!(Hand::from(&hand), bet.hand);
-    // }
+        let msg = QueryMsg::TokenBet { id };
+        let res = query(&deps, msg).unwrap();
+        let bet: TokenBet = from_binary(&res).unwrap();
+        assert_eq!(denom, bet.denom);
+        assert_eq!(amount, bet.amount);
+        assert_eq!(Hand::from(&hand), bet.hand);
+    }
 }
