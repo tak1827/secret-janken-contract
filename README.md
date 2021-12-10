@@ -90,6 +90,6 @@ Scissors = 3
 # The One Match Point
 ```
 Win  = 1
-Draw = 2
-Lose = 3
+Draw = 0
+Lose = -1
 ```
